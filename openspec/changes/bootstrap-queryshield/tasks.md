@@ -2,12 +2,12 @@
 
 ## 1. Fundações e base de dados
 
-- [ ] 1.1 Criar `backend/app/{api,auth,semantic,generation,validation,execution,verification}`, `db/`, `frontend/`, `eval/` e `docs/learn/`; verificar com `git status`
-- [ ] 1.2 Confirmar e fixar versões (FastAPI, Pydantic v2, SQLGlot, psycopg 3, httpx, pytest, Ruff); verificar a instalação
-- [ ] 1.3 Instalar ou ligar o PostgreSQL e documentar o procedimento no Windows; verificar com `psql -c "select version()"`
-- [ ] 1.4 Criar as migrações SQL: schema (10 tabelas com FKs), roles `qs_app`/`qs_reader`, views por papel, RLS e grants; verificar com testes `-m postgres` de que o `qs_reader` não escreve, não lê a tabela secreta e só vê o seu vendedor
-- [ ] 1.5 Criar o seed determinístico com os casos difíceis; verificar que dois seeds com a mesma seed produzem contagens idênticas
-- [ ] 1.6 Escrever `docs/learn/04-roles-grants-views.md` e `05-row-level-security.md`; verificar que cada afirmação tem um teste
+- [x] 1.1 Criar `backend/app/{api,auth,semantic,generation,validation,execution,verification}`, `db/`, `frontend/`, `eval/` e `docs/learn/`; verificar com `git status`
+- [x] 1.2 Confirmar e fixar versões (FastAPI, Pydantic v2, SQLGlot, psycopg 3, httpx, pytest, Ruff); verificar a instalação
+- [x] 1.3 Instalar ou ligar o PostgreSQL e documentar o procedimento no Windows; verificar com `psql -c "select version()"`
+- [x] 1.4 Criar as migrações SQL: schema (10 tabelas com FKs), roles `qs_app`/`qs_reader`, views por papel, RLS e grants; verificar com testes `-m postgres` de que o `qs_reader` não escreve, não lê a tabela secreta e só vê o seu vendedor
+- [x] 1.5 Criar o seed determinístico com os casos difíceis; verificar que dois seeds com a mesma seed produzem contagens idênticas
+- [x] 1.6 Escrever `docs/learn/04-roles-grants-views.md` e `05-row-level-security.md`; verificar que cada afirmação tem um teste
 
 ## 2. Semantic layer e autenticação
 
