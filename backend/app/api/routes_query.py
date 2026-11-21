@@ -2,6 +2,7 @@
 
 Regra de execução: o SQL é SEMPRE validado de novo no pedido. Um validated_hash enviado pelo
 cliente só serve para provar que o SQL não mudou; se não corresponder, o pedido é recusado.
+Avisos semânticos (verificação) não bloqueiam: marcam o resultado como não verificado.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ from backend.app.generation.models import GenerationError
 from backend.app.generation.service import MAX_QUESTION_CHARS, build_proposal
 from backend.app.validation.ast_validator import ValidationResult, validate_sql
 from backend.app.validation.policy import MAX_SQL_LENGTH
+from backend.app.verification.checks import verify_semantics
+from backend.app.verification.explain import build_explanation
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -30,6 +33,7 @@ EXECUTION_STATUS = {
     "execution_failed": 422,
     "result_too_large": 413,
 }
+MAX_ASSUMPTIONS = 10
 
 
 class ValidateRequest(BaseModel):
@@ -50,6 +54,9 @@ class ExecuteRequest(BaseModel):
     validated_hash: Annotated[str | None, Field(max_length=64)] = None
     explain: bool = False
     question: Annotated[str | None, Field(max_length=MAX_QUESTION_CHARS)] = None
+    assumptions: Annotated[
+        list[Annotated[str, Field(max_length=300)]], Field(max_length=MAX_ASSUMPTIONS)
+    ] = Field(default_factory=list)
 
 
 def _validate(
@@ -61,13 +68,29 @@ def _validate(
     return result
 
 
+def _warnings(request: Request, result: ValidationResult) -> list[dict[str, str]]:
+    if not result.ok:
+        return []
+    return verify_semantics(result.canonical_sql, request.app.state.semantic)
+
+
+def _review(request: Request, result: ValidationResult) -> dict[str, Any]:
+    """Validação + verificação semântica. Só é verificado se não houver avisos."""
+    warnings = _warnings(request, result)
+    body = result.as_dict()
+    body["warnings"] = warnings
+    body["verified"] = result.ok and not warnings
+    return body
+
+
 @router.post("/validate")
 def validate(
     body: ValidateRequest,
     request: Request,
     principal: Annotated[Principal, Depends(get_principal)],
 ) -> dict[str, Any]:
-    return _validate(request, principal, body.sql, body.parameters).as_dict()
+    result = _validate(request, principal, body.sql, body.parameters)
+    return _review(request, result)
 
 
 @router.post("/generate")
@@ -85,9 +108,8 @@ def generate(
         raise ApiError(status, exc.code, exc.message) from exc
     validation = None
     if proposal["sql"] is not None:
-        validation = _validate(
-            request, principal, proposal["sql"], proposal["parameters"]
-        ).as_dict()
+        result = _validate(request, principal, proposal["sql"], proposal["parameters"])
+        validation = _review(request, result)
     request.app.state.history.record(
         principal.user,
         question=body.question,
@@ -116,18 +138,33 @@ def execute(
         )
     if body.validated_hash is not None and body.validated_hash != result.sql_hash:
         raise ApiError(409, "not_validated", "O SQL foi alterado desde a validação.")
+    warnings = _warnings(request, result)
     history_store = request.app.state.history
     try:
         if body.explain:
             plan = executor.explain(result.canonical_sql, body.parameters, principal.seller_id)
             history_store.record(
-                principal.user, question=body.question, sql=result.canonical_sql, status="explained"
+                principal.user,
+                question=body.question,
+                sql=result.canonical_sql,
+                status="explained",
+                warnings=warnings,
             )
-            return {"mode": "explain", "sql_hash": result.sql_hash, "plan": plan}
+            return {
+                "mode": "explain",
+                "sql_hash": result.sql_hash,
+                "plan": plan,
+                "warnings": warnings,
+                "verified": not warnings,
+            }
         outcome = executor.execute(result.canonical_sql, body.parameters, principal.seller_id)
     except ExecutionError as exc:
         history_store.record(
-            principal.user, question=body.question, sql=result.canonical_sql, status="failed"
+            principal.user,
+            question=body.question,
+            sql=result.canonical_sql,
+            status="failed",
+            warnings=warnings,
         )
         raise ApiError(EXECUTION_STATUS.get(exc.code, 422), exc.code, exc.message) from exc
     history_store.record(
@@ -135,6 +172,15 @@ def execute(
         question=body.question,
         sql=result.canonical_sql,
         status="executed",
+        warnings=warnings,
+        row_count=outcome.row_count,
+    )
+    explanation = build_explanation(
+        sql=result.canonical_sql,
+        parameters=body.parameters,
+        tables=list(result.tables),
+        assumptions=body.assumptions,
+        warnings=warnings,
         row_count=outcome.row_count,
     )
     return {
@@ -145,7 +191,9 @@ def execute(
         "row_count": outcome.row_count,
         "truncated": outcome.truncated,
         "elapsed_ms": outcome.elapsed_ms,
-        "warnings": [],
+        "warnings": warnings,
+        "verified": not warnings,
+        "explanation": explanation,
     }
 
 

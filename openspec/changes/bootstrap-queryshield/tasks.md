@@ -30,9 +30,9 @@
 
 ## 5. Verificação
 
-- [ ] 5.1 Implementar `metric_definition_mismatch`, `unknown_column` com sugestão, `possible_fanout` e a explicação ao utilizador; verificar com testes de receita sem devoluções, coluna inexistente e fan-out
-- [ ] 5.2 Implementar o explain seguro (sem ANALYZE); verificar que não executa a query
-- [ ] 5.3 Escrever `docs/learn/07-alucinacoes-sql-e-fanout.md`; verificar os exemplos com testes
+- [x] 5.1 Implementar `metric_definition_mismatch`, `unknown_column` com sugestão, `possible_fanout` e a explicação ao utilizador; verificar com testes de receita sem devoluções, coluna inexistente e fan-out
+- [x] 5.2 Implementar o explain seguro (sem ANALYZE); verificar que não executa a query
+- [x] 5.3 Escrever `docs/learn/07-alucinacoes-sql-e-fanout.md`; verificar os exemplos com testes
 
 ## 6. Frontend
 
