@@ -1,4 +1,4 @@
-"""A semantic layer tem de coincidir, coluna a coluna, com as vistas que o reader vê na base de dados."""
+"""A semantic layer tem de coincidir, coluna a coluna, com as vistas do reader."""
 
 from __future__ import annotations
 

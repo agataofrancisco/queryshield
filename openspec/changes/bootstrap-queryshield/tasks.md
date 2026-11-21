@@ -17,9 +17,9 @@
 
 ## 3. Validação
 
-- [ ] 3.1 Implementar o validador AST (statement único, nós proibidos, allowlists de tabelas/colunas/funções, CTEs, joins, produto cartesiano, LIMIT/agregação); verificar com testes de cada ataque da spec
-- [ ] 3.2 Expor `POST /query/validate` com o registo do hash validado; verificar com testes de API
-- [ ] 3.3 Escrever `docs/learn/03-ast-e-sqlglot.md` (porquê não regex, com exemplos de bypass de regex); verificar os exemplos com testes
+- [x] 3.1 Implementar o validador AST (statement único, nós proibidos, allowlists de tabelas/colunas/funções, CTEs, joins, produto cartesiano, LIMIT/agregação); verificar com testes de cada ataque da spec
+- [x] 3.2 Expor `POST /query/validate` com o registo do hash validado; verificar com testes de API
+- [x] 3.3 Escrever `docs/learn/03-ast-e-sqlglot.md` (porquê não regex, com exemplos de bypass de regex); verificar os exemplos com testes
 
 ## 4. Geração e execução
 
