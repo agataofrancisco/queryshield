@@ -23,10 +23,10 @@
 
 ## 4. Geração e execução
 
-- [ ] 4.1 Implementar o provider compatível com OpenAI e o mock determinístico, o prompt com schema por papel e o parsing estruturado com `needs_clarification`; verificar com testes de pergunta simples, ambígua e injecção
-- [ ] 4.2 Implementar o executor (pool `qs_reader`, transacção READ ONLY, `SET LOCAL` de timeout e seller, LIMIT forçado, `not_validated`, erros sem credenciais); verificar com testes `-m postgres` de timeout, cross-tenant e escrita com validador desligado
-- [ ] 4.3 Expor `POST /query/generate`, `POST /query/execute`, `GET /query/history` e `GET /health`; verificar com testes de API e isolamento de histórico
-- [ ] 4.4 Escrever `docs/learn/02-text-to-sql-com-llms.md` e `06-timeouts-e-limites.md`; verificar a consistência com o código
+- [x] 4.1 Implementar o provider compatível com OpenAI e o mock determinístico, o prompt com schema por papel e o parsing estruturado com `needs_clarification`; verificar com testes de pergunta simples, ambígua e injecção
+- [x] 4.2 Implementar o executor (pool `qs_reader`, transacção READ ONLY, `SET LOCAL` de timeout e seller, LIMIT forçado, `not_validated`, erros sem credenciais); verificar com testes `-m postgres` de timeout, cross-tenant e escrita com validador desligado
+- [x] 4.3 Expor `POST /query/generate`, `POST /query/execute`, `GET /query/history` e `GET /health`; verificar com testes de API e isolamento de histórico
+- [x] 4.4 Escrever `docs/learn/02-text-to-sql-com-llms.md` e `06-timeouts-e-limites.md`; verificar a consistência com o código
 
 ## 5. Verificação
 

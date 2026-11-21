@@ -1,9 +1,11 @@
-"""Envelope de erro único: {"error": {"code": ..., "message": ...}}.
+"""Envelope de erro único: {"error": {"code": ..., "message": ..., ...}}.
 
 A mensagem é sempre genérica e nunca inclui hosts, utilizadores, passwords ou SQL interno.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -11,16 +13,22 @@ from fastapi.responses import JSONResponse
 
 class ApiError(Exception):
     def __init__(
-        self, status_code: int, code: str, message: str, headers: dict[str, str] | None = None
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        headers: dict[str, str] | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(code)
         self.status_code = status_code
         self.code = code
         self.message = message
         self.headers = headers
+        self.details = details or {}
 
 
-def error_body(code: str, message: str, **extra: object) -> dict[str, object]:
+def error_body(code: str, message: str, **extra: Any) -> dict[str, Any]:
     return {"error": {"code": code, "message": message, **extra}}
 
 
@@ -29,6 +37,6 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _handle_api_error(_: Request, exc: ApiError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content=error_body(exc.code, exc.message),
+            content=error_body(exc.code, exc.message, **exc.details),
             headers=exc.headers,
         )

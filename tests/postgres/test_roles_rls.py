@@ -16,7 +16,7 @@ pytestmark = pytest.mark.postgres
 
 
 def set_tenant(conn: psycopg.Connection, seller_id: int | str) -> None:
-    conn.execute("SELECT set_config('app.seller_id', %s, true)", (str(seller_id),))
+    conn.execute("SELECT qs_api.begin_request(%s, 3000)", (int(seller_id),))
 
 
 @pytest.fixture()
@@ -187,3 +187,18 @@ def test_every_business_table_has_rls_enabled_and_forced(admin: psycopg.Connecti
     for name, enabled, forced, policies in rows:
         assert enabled and forced, name
         assert policies == 1, name
+
+
+def test_reader_cannot_change_tenant_with_set_config(reader: psycopg.Connection) -> None:
+    # Ataque: SQL gerado a tentar mudar o tenant dentro da transacção (validador desligado).
+    with pytest.raises(errors.InsufficientPrivilege):
+        with reader.transaction():
+            set_tenant(reader, 1)
+            reader.execute("SELECT set_config('app.seller_id', '2', true)")
+
+
+def test_request_scope_can_only_start_once_per_transaction(reader: psycopg.Connection) -> None:
+    with pytest.raises(errors.InsufficientPrivilege):
+        with reader.transaction():
+            set_tenant(reader, 1)
+            set_tenant(reader, 2)  # segunda tentativa na mesma transacção

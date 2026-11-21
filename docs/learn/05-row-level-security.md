@@ -8,7 +8,7 @@ Queremos que o isolamento seja uma garantia da base de dados, aplicada a cada li
 
 ## O que entra e o que sai
 
-Entra: o SQL gerado e o tenant autenticado, definido pelo servidor com `set_config('app.seller_id', ..., true)`. Sai: apenas as linhas desse tenant.
+Entra: o SQL gerado e o tenant autenticado, definido pelo servidor com `qs_api.begin_request(seller, timeout)`. Sai: apenas as linhas desse tenant.
 
 Saída real (ligação `qs_reader`, mesma base de desenvolvimento):
 
@@ -25,7 +25,8 @@ Saída real (ligação `qs_reader`, mesma base de desenvolvimento):
 
 - `db/migrations/003_rls.sql:14-17` define `qs_private.current_seller_id()`: lê `app.seller_id` com `current_setting(..., true)` (missing_ok) e devolve `NULL` quando não está definido ou é vazio. `NULL` nunca é igual a um `seller_id`, por isso a política dá falso sem erro.
 - `003_rls.sql:20-21` activa RLS e **`FORCE ROW LEVEL SECURITY`** em cada tabela de negócio. A política é `USING (seller_id = qs_private.current_seller_id())` e o mesmo predicado em `WITH CHECK`, para que escritas (que não existem para o reader) também fiquem limitadas ao tenant.
-- O executor (tarefa 4.2) faz `SELECT set_config('app.seller_id', %s, true)` **dentro** da transacção. O terceiro argumento `true` torna a definição local à transacção: no commit ou rollback volta a `''`. Esta é a propriedade que torna o pool de ligações seguro (ver teste abaixo).
+- O executor (`backend/app/execution/executor.py:118-122`) chama `SELECT qs_api.begin_request(%s, %s)` **dentro** da transacção, antes de qualquer SQL do utilizador. A função (migração `db/migrations/005_request_scope.sql`) faz `set_config(..., true)`: a definição é local à transacção e no commit ou rollback volta a `''`. Esta é a propriedade que torna o pool de ligações seguro (ver teste abaixo).
+- **Porque não `set_config` directamente.** Antes da migração 005, `qs_reader` podia chamar `set_config('app.seller_id', '2', true)` no próprio SQL gerado e mudar de tenant dentro da transacção. Esta falha foi encontrada ao rever as ameaças do executor com o validador desligado. A correcção: `EXECUTE` em `set_config` é retirado do `PUBLIC` (concedido só ao dono `qs_app`), e `begin_request` é `SECURITY DEFINER`, só pode ser chamada uma vez por transacção (flag local `qs.request_started`) e é chamada pelo executor antes do SQL do utilizador. Os testes `test_reader_cannot_change_tenant_with_set_config` e `test_request_scope_can_only_start_once_per_transaction` (em `tests/postgres/test_roles_rls.py`) e `test_sql_cannot_change_the_tenant_inside_the_transaction` (em `tests/postgres/test_executor.py`) provam o comportamento.
 - O `SET LOCAL app.seller_id = %s` não serve, porque `SET` não aceita parâmetros ligados. `set_config` é a forma parametrizada.
 
 ### Porque é que `FORCE` é necessário
@@ -38,7 +39,7 @@ Os superusers continuam a contornar RLS. Por isso `db/seed.py` e `db/migrate.py`
 
 - **Garantia na base de dados.** A política é avaliada em cada linha, para qualquer SQL, incluindo subqueries, CTEs e joins. O SQL não precisa de cooperar.
 - **Fail-closed.** Sem tenant, nada. Um bug que esqueça de definir o tenant falha de forma visível (zero linhas) e não expõe dados.
-- **`set_config(..., true)` com pool.** O tenant é local à transacção, por isso não vaza para o próximo pedido que reutiliza a mesma ligação.
+- **Âmbito de pedido com pool.** O tenant é local à transacção, por isso não vaza para o próximo pedido que reutiliza a mesma ligação, e só o executor o pode definir.
 - **`WITH CHECK` mesmo sem escrita.** Se um dia o reader ganhar escrita por engano, a política continua a limitar as linhas escritas.
 
 ## Alternativas
@@ -67,8 +68,8 @@ Porque é aplicada pelo motor a cada linha, depois de o planeador ter decidido o
 **2. O que é `FORCE ROW LEVEL SECURITY` e quando é que o dono importa?**
 Por omissão, o dono da tabela não é afectado por RLS. `FORCE` aplica a política também ao dono. Importa quando as vistas são do dono e o reader lê através delas.
 
-**3. Porque é que `set_config(..., true)` e não `SET`?**
-`SET` não aceita parâmetros ligados em PostgreSQL, por isso não é seguro concatenar o `seller_id` (injecção). `set_config` é uma função e aceita parâmetros. O terceiro argumento `true` torna-o local à transacção.
+**3. Porque é que não se usa `SET LOCAL app.seller_id`?**
+`SET` não aceita parâmetros ligados em PostgreSQL, por isso concatenar o `seller_id` seria injecção. Usamos uma função (`begin_request`) que aceita parâmetros e faz `set_config(..., true)` internamente.
 
 **4. O que acontece ao tenant se a transacção falhar?**
 É revertido junto com a transacção. Não é preciso limpar nada.

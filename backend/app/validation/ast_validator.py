@@ -213,6 +213,7 @@ class _Checker:
         self._check_joins()
         self._check_limit_or_aggregation()
         self._check_placeholders()
+        self._check_literals()
         return self.issues
 
     def _check_forbidden(self) -> None:
@@ -399,6 +400,15 @@ class _Checker:
                 self.add(
                     "limit_or_aggregation_required",
                     "A consulta tem de ter LIMIT ou agregação (GROUP BY ou função de agregação).",
+                )
+
+    def _check_literals(self) -> None:
+        # Com parâmetros, o psycopg interpreta '%': um literal com '%' partiria a execução.
+        for literal in self.root.find_all(exp.Literal):
+            if literal.is_string and "%" in literal.this:
+                self.add(
+                    "literal_percent_not_allowed",
+                    "Literais de texto com '%' não são suportados (use igualdade ou parâmetros).",
                 )
 
     def _check_placeholders(self) -> None:
