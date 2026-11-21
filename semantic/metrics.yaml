@@ -1,0 +1,76 @@
+# Definições canónicas das métricas de negócio do Kianda Market.
+# "canonical_sql" é documentação e exemplo para o prompt; nunca é executado tal como está.
+# "signature" é a agregação que identifica a métrica no SQL gerado (usada pela verificação).
+# "requires_tables" e "requires_filter_columns" são o que uma consulta correcta tem de conter
+# quando usa essa agregação. A ausência gera metric_definition_mismatch.
+
+version: 1
+
+metrics:
+  periodo:
+    title: Período
+    description: >-
+      Intervalo de datas sobre orders.ordered_on, com início inclusivo e fim exclusivo.
+      Sem período explícito, a resposta TEM de dizer que assumiu todo o histórico ou o mês
+      corrente, conforme a pergunta. Um período ambíguo gera needs_clarification.
+    unit: data
+    filter_column: orders.ordered_on
+    canonical_sql: "orders.ordered_on >= :start AND orders.ordered_on < :end"
+    signature: null
+    requires_tables: []
+    requires_filter_columns: []
+
+  venda:
+    title: Venda
+    description: >-
+      Uma linha de item (order_items) de uma encomenda válida em AOA. Conta itens vendidos,
+      não encomendas.
+    unit: unidades
+    canonical_sql: >-
+      SELECT COUNT(oi.id) FROM order_items oi JOIN orders o ON o.id = oi.order_id
+      WHERE o.status IN ('paid', 'shipped', 'delivered') AND o.currency = 'AOA'
+    signature: {aggregate: COUNT, column: order_items.id}
+    requires_tables: [orders]
+    requires_filter_columns: [orders.status, orders.currency]
+
+  encomenda_valida:
+    title: Encomenda válida
+    description: >-
+      Encomenda com estado paid, shipped ou delivered e moeda AOA. Canceladas e pendentes
+      não contam.
+    unit: encomendas
+    canonical_sql: >-
+      SELECT COUNT(DISTINCT o.id) FROM orders o
+      WHERE o.status IN ('paid', 'shipped', 'delivered') AND o.currency = 'AOA'
+    signature: {aggregate: COUNT, column: orders.id}
+    requires_tables: []
+    requires_filter_columns: [orders.status]
+
+  receita:
+    title: Receita
+    description: >-
+      Soma de order_items.line_total das encomendas válidas em AOA, MENOS as devoluções
+      (returns.refund_amount) dessas mesmas linhas. Usar pré-agregação de devoluções por linha
+      para não duplicar valores (fan-out).
+    unit: AOA
+    canonical_sql: >-
+      SELECT ROUND(SUM(oi.line_total) - SUM(COALESCE(r.refund, 0)), 2)
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.id
+      LEFT JOIN (SELECT order_item_id, SUM(refund_amount) AS refund FROM returns
+                 GROUP BY order_item_id) r ON r.order_item_id = oi.id
+      WHERE o.status IN ('paid', 'shipped', 'delivered') AND o.currency = 'AOA'
+    signature: {aggregate: SUM, column: order_items.line_total}
+    requires_tables: [returns, orders]
+    requires_filter_columns: [orders.status, orders.currency]
+
+  devolucao:
+    title: Devolução
+    description: >-
+      Valor reembolsado (returns.refund_amount) por devoluções registadas, em AOA. É o que
+      se subtrai à receita.
+    unit: AOA
+    canonical_sql: "SELECT ROUND(SUM(r.refund_amount), 2) FROM returns r"
+    signature: {aggregate: SUM, column: returns.refund_amount}
+    requires_tables: []
+    requires_filter_columns: []

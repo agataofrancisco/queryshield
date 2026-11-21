@@ -11,8 +11,8 @@
 
 ## 2. Semantic layer e autenticação
 
-- [ ] 2.1 Criar `metrics.yaml` e `schema.yaml` (papéis, colunas, joins permitidos), o loader validado e `GET /schema/semantic` por papel; verificar com teste de analista sem email/telefone
-- [ ] 2.2 Implementar JWT demo com `seller_id` e papel; verificar com testes de 401 e de papéis
+- [x] 2.1 Criar `metrics.yaml` e `schema.yaml` (papéis, colunas, joins permitidos), o loader validado e `GET /schema/semantic` por papel; verificar com teste de analista sem email/telefone
+- [x] 2.2 Implementar JWT demo com `seller_id` e papel; verificar com testes de 401 e de papéis
 - [ ] 2.3 Escrever `docs/learn/00-visao-geral.md` e `01-semantic-layer.md`; verificar o diagrama do pipeline de 7 passos
 
 ## 3. Validação

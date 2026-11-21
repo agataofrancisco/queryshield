@@ -1,0 +1,141 @@
+# Semantic layer: tabelas visíveis, colunas por papel e joins permitidos.
+# Fonte única de verdade para o prompt, o validador AST, a verificação e GET /schema/semantic.
+# Os nomes são os das vistas qs_api (db/migrations/004_views.sql). Nunca há tabela ou vista
+# para internal_fraud_flags: esta tabela não aparece aqui de propósito.
+#
+# Papéis: seller_analyst | seller_finance | platform_admin
+# Uma coluna sem "roles" herda os papéis da tabela. Uma coluna com "roles" fica visível só a esses.
+
+version: 1
+
+tables:
+  sellers:
+    description: Vendedor (tenant) do marketplace. Cada sessão só vê o seu próprio vendedor.
+    roles: [seller_analyst, seller_finance, platform_admin]
+    columns:
+      id: {type: integer, description: Identificador do vendedor (tenant)}
+      name: {type: text, description: Nome comercial do vendedor}
+      currency: {type: text, description: Moeda base do vendedor (AOA)}
+      created_on: {type: date, description: Data de registo}
+
+  categories:
+    description: Categoria de produtos de um vendedor.
+    roles: [seller_analyst, seller_finance, platform_admin]
+    columns:
+      id: {type: integer, description: Identificador da categoria}
+      seller_id: {type: integer, description: Vendedor (tenant)}
+      name: {type: text, description: Nome da categoria}
+
+  customers:
+    description: >-
+      Cliente de um vendedor. Email e telefone NÃO são expostos ao executor: não existem
+      na vista qs_api.customers.
+    roles: [seller_analyst, seller_finance, platform_admin]
+    columns:
+      id: {type: integer, description: Identificador do cliente}
+      seller_id: {type: integer, description: Vendedor (tenant)}
+      full_name: {type: text, description: Nome do cliente (fictício)}
+      city: {type: text, description: Cidade do cliente}
+      created_on: {type: date, description: Data de criação da conta}
+
+  products:
+    description: Produto do catálogo de um vendedor.
+    roles: [seller_analyst, seller_finance, platform_admin]
+    columns:
+      id: {type: integer, description: Identificador do produto}
+      seller_id: {type: integer, description: Vendedor (tenant)}
+      category_id: {type: integer, description: Categoria do produto}
+      name: {type: text, description: Nome do produto}
+      unit_price: {type: numeric, description: Preço de catálogo em AOA}
+      active: {type: boolean, description: Produto activo no catálogo}
+
+  orders:
+    description: Encomenda. Só as encomendas com estado paid, shipped ou delivered são válidas.
+    roles: [seller_analyst, seller_finance, platform_admin]
+    columns:
+      id: {type: integer, description: Identificador da encomenda}
+      seller_id: {type: integer, description: Vendedor (tenant)}
+      customer_id: {type: integer, description: Cliente que fez a encomenda}
+      status: {type: text, description: "Estado: pending, paid, shipped, delivered ou cancelled"}
+      currency: {type: text, description: Moeda da encomenda (AOA ou USD)}
+      ordered_on: {type: date, description: Data da encomenda (usada para o período)}
+      total_amount: {type: numeric, description: Total da encomenda. Não usar para somar receita (ver fan-out)}
+
+  order_items:
+    description: Linha de uma encomenda. line_total = quantity x unit_price.
+    roles: [seller_analyst, seller_finance, platform_admin]
+    columns:
+      id: {type: integer, description: Identificador da linha}
+      seller_id: {type: integer, description: Vendedor (tenant)}
+      order_id: {type: integer, description: Encomenda a que pertence}
+      product_id: {type: integer, description: Produto vendido}
+      quantity: {type: integer, description: Quantidade vendida}
+      unit_price: {type: numeric, description: Preço unitário praticado em AOA ou USD}
+      line_total: {type: numeric, description: Valor da linha (quantity x unit_price)}
+
+  returns:
+    description: Devolução parcial ou total de uma linha de encomenda.
+    roles: [seller_analyst, seller_finance, platform_admin]
+    columns:
+      id: {type: integer, description: Identificador da devolução}
+      seller_id: {type: integer, description: Vendedor (tenant)}
+      order_item_id: {type: integer, description: Linha de encomenda devolvida}
+      quantity: {type: integer, description: Quantidade devolvida}
+      refund_amount: {type: numeric, description: Valor reembolsado em AOA ou USD}
+      returned_on: {type: date, description: Data da devolução}
+      reason: {type: text, description: Motivo da devolução}
+
+  payments:
+    description: Pagamento associado a uma encomenda. Visível só a finanças e administração.
+    roles: [seller_finance, platform_admin]
+    columns:
+      id: {type: integer, description: Identificador do pagamento}
+      seller_id: {type: integer, description: Vendedor (tenant)}
+      order_id: {type: integer, description: Encomenda paga}
+      amount: {type: numeric, description: Valor pago}
+      method: {type: text, description: "Método: card, transfer ou cash_on_delivery"}
+      paid_on: {type: date, description: Data do pagamento}
+      status: {type: text, description: "Estado: captured, failed ou refunded"}
+
+  payouts:
+    description: Liquidação mensal ao vendedor, com comissão. Visível só a finanças e administração.
+    roles: [seller_finance, platform_admin]
+    columns:
+      id: {type: integer, description: Identificador da liquidação}
+      seller_id: {type: integer, description: Vendedor (tenant)}
+      period_month: {type: date, description: Primeiro dia do mês da liquidação}
+      gross_amount: {type: numeric, description: Receita bruta do mês em AOA}
+      commission_amount: {type: numeric, description: Comissão da plataforma em AOA}
+      net_amount: {type: numeric, description: Valor líquido pago ao vendedor (bruto - comissão)}
+      paid_on: {type: date, description: Data de pagamento}
+
+joins:
+  # Cada join é "tabela.coluna -> tabela.coluna". Qualquer outro join é rejeitado (join_not_allowed).
+  - from: orders.customer_id
+    to: customers.id
+  - from: orders.seller_id
+    to: sellers.id
+  - from: customers.seller_id
+    to: sellers.id
+  - from: categories.seller_id
+    to: sellers.id
+  - from: products.category_id
+    to: categories.id
+  - from: products.seller_id
+    to: sellers.id
+  - from: order_items.order_id
+    to: orders.id
+  - from: order_items.product_id
+    to: products.id
+  - from: order_items.seller_id
+    to: sellers.id
+  - from: returns.order_item_id
+    to: order_items.id
+  - from: returns.seller_id
+    to: sellers.id
+  - from: payments.order_id
+    to: orders.id
+  - from: payments.seller_id
+    to: sellers.id
+  - from: payouts.seller_id
+    to: sellers.id
