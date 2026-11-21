@@ -37,7 +37,7 @@
 ## 6. Frontend
 
 - [ ] 6.1 Criar a app React com login por persona, chat, SQL com highlight, tabela, gráfico, avisos, explain e feedback; verificar no browser: uma pergunta → SQL validado → gráfico, e 3 casos bloqueados
-- [ ] 6.2 Verificar que não há credenciais nem connection strings no bundle (`npm run build` + pesquisa)
+- [x] 6.2 Verificar que não há credenciais nem connection strings no bundle (`npm run build` + pesquisa)
 
 ## 7. Avaliação
 
