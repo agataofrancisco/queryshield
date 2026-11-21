@@ -1,0 +1,7 @@
+* text=auto
+
+# Binários: nunca normalizar fim de linha nem tratar como texto
+*.pdf binary
+*.png binary
+*.jpg binary
+*.sqlite binary
