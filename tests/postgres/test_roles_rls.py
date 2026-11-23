@@ -202,3 +202,23 @@ def test_request_scope_can_only_start_once_per_transaction(reader: psycopg.Conne
         with reader.transaction():
             set_tenant(reader, 1)
             set_tenant(reader, 2)  # segunda tentativa na mesma transacção
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Achado aberto (docs/security-review.md): o tenant é uma definição de sessão. "
+        "Um SET directo na mesma transacção muda o que a RLS vê. A API está protegida "
+        "pelo embrulho do executor e pelo validador."
+    ),
+)
+def test_plain_set_of_the_tenant_setting_cannot_change_what_rls_shows(
+    reader: psycopg.Connection,
+) -> None:
+    with reader.transaction():
+        set_tenant(reader, 1)
+        reader.execute("SET app.seller_id = '2'")
+        seen = reader.execute(
+            "SELECT count(*), min(seller_id), max(seller_id) FROM orders"
+        ).fetchone()
+    assert seen[1] == 1 and seen[2] == 1 and seen[0] > 0

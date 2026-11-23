@@ -85,3 +85,11 @@ Não. Por isso o executor nunca usa uma ligação de superuser, e o seed e as mi
 
 **8. Como provaria que o isolamento não depende do SQL gerado?**
 Com um teste de pedido explícito de outro tenant (`WHERE seller_id = 2`) e com o validador desligado: o resultado continua a ser só o do tenant autenticado. Esse teste é o da tarefa 4.2 (executor com validador desligado), ainda por implementar.
+
+## Limite conhecido (achado aberto)
+
+O tenant continua a ser uma definição de sessão (`app.seller_id`). Dentro da mesma transacção, um
+`SET app.seller_id = '2'` muda o que a RLS devolve: é o teste xfail
+`test_plain_set_of_the_tenant_setting_cannot_change_what_rls_shows`. Uma tentativa de corrigir isto com
+uma tabela privada (migração 006) foi revertida, porque a escrita falha numa transacção só de leitura.
+A correcção exige duas transacções por pedido e um token de pedido. Ver `docs/security-review.md`, A1 e A2.

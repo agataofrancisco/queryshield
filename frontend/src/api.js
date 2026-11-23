@@ -1,7 +1,7 @@
 // Cliente da API. O token vive apenas em memória (nunca em localStorage).
 // Todas as respostas são dados não confiáveis: os componentes convertem e verificam tipos.
 
-export const API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+export const API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:18200").replace(/\/$/, "");
 
 export class ApiFailure extends Error {
   constructor(status, code, message, details) {

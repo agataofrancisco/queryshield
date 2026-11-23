@@ -52,7 +52,7 @@ class Settings:
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = ""
     llm_api_key: str = field(default="", repr=False)
-    cors_origins: tuple[str, ...] = ("http://localhost:5173",)
+    cors_origins: tuple[str, ...] = ("http://localhost:13200",)
     semantic_dir: Path = DEFAULT_SEMANTIC_DIR
     statement_timeout_ms: int = 3000
     max_rows: int = 500
@@ -68,7 +68,7 @@ class Settings:
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Settings:
-        origins_raw = env.get("QS_CORS_ORIGINS", "http://localhost:5173")
+        origins_raw = env.get("QS_CORS_ORIGINS", "http://localhost:13200")
         origins = tuple(o.strip() for o in origins_raw.split(",") if o.strip())
         semantic_dir = Path(env["QS_SEMANTIC_DIR"]) if env.get("QS_SEMANTIC_DIR") else None
         return cls(

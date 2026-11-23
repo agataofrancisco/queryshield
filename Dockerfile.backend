@@ -1,0 +1,25 @@
+# Backend QueryShield (FastAPI). NÃO TESTADO LOCALMENTE: este ambiente não tem Docker.
+# Build: docker build -f Dockerfile.backend -t queryshield-api .
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    # Instalado em site-packages: o caminho por defeito da semantic layer não serve aqui.
+    QS_SEMANTIC_DIR=/app/semantic
+
+WORKDIR /app
+
+# Dependências fixadas em pyproject.toml (versões exactas).
+COPY pyproject.toml README.md ./
+COPY backend ./backend
+COPY db ./db
+COPY semantic ./semantic
+RUN pip install --no-cache-dir .
+
+# Utilizador sem privilégios. Nenhuma credencial é copiada para a imagem:
+# QS_READER_DSN, QS_JWT_SECRET e QS_LLM_API_KEY são injectados em runtime.
+RUN useradd --create-home --uid 10001 qs
+USER qs
+
+EXPOSE 8000
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
