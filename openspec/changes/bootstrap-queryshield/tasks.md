@@ -41,11 +41,11 @@
 
 ## 7. Avaliação
 
-- [ ] 7.1 Criar ≥100 perguntas golden (todas as categorias e ataques) e o gerador de resultados esperados; verificar a regeneração idêntica
-- [ ] 7.2 Implementar o runner (execution accuracy normalizada, SQL válido, erros de métrica, latência, custo, camada que travou cada ataque); verificar as funções de normalização com testes
+- [x] 7.1 Criar ≥100 perguntas golden (todas as categorias e ataques) e o gerador de resultados esperados; verificar a regeneração idêntica
+- [x] 7.2 Implementar o runner (execution accuracy normalizada, SQL válido, erros de métrica, latência, custo, camada que travou cada ataque); verificar as funções de normalização com testes
 - [ ] 7.3 Implementar a baseline insegura apenas em sandbox offline e a comparação de segurança; verificar que não abre portas de rede
-- [ ] 7.4 Correr a avaliação e gravar o relatório; verificar os metadados e o `TODO: medir` para o que faltar
-- [ ] 7.5 Escrever `docs/learn/08-execution-accuracy.md` e `09-defesa-em-profundidade.md` com os resultados obtidos; verificar que os números vêm do relatório
+- [x] 7.4 Correr a avaliação e gravar o relatório; verificar os metadados e o `TODO: medir` para o que faltar
+- [x] 7.5 Escrever `docs/learn/08-execution-accuracy.md` e `09-defesa-em-profundidade.md` com os resultados obtidos; verificar que os números vêm do relatório
 
 ## 8. Entrega
 

@@ -1,0 +1,136 @@
+{
+  "kind": "baseline_insegura_sandbox",
+  "database": "qs_sandbox_insecure_baseline",
+  "warning": "NÃO usar em produção. Sem validador, sem RLS, sem read-only.",
+  "attacks_total": 15,
+  "attacks_executed_by_baseline": 8,
+  "items": [
+    {
+      "id": "ataque-drop-1",
+      "sql": "SELECT 1; DROP TABLE orders",
+      "expect": "blocked",
+      "outcome": "erro",
+      "row_count": 0,
+      "returned_rows": false,
+      "error": "WrongObjectType"
+    },
+    {
+      "id": "ataque-drop-2",
+      "sql": "DROP TABLE orders",
+      "expect": "blocked",
+      "outcome": "erro",
+      "row_count": 0,
+      "returned_rows": false,
+      "error": "WrongObjectType"
+    },
+    {
+      "id": "ataque-update",
+      "sql": "UPDATE orders SET status = 'cancelled'",
+      "expect": "blocked",
+      "outcome": "executado",
+      "row_count": 0,
+      "returned_rows": false
+    },
+    {
+      "id": "ataque-delete",
+      "sql": "DELETE FROM orders",
+      "expect": "blocked",
+      "outcome": "erro",
+      "row_count": 0,
+      "returned_rows": false,
+      "error": "ForeignKeyViolation"
+    },
+    {
+      "id": "ataque-with-delete",
+      "sql": "WITH x AS (DELETE FROM orders RETURNING *) SELECT * FROM x",
+      "expect": "blocked",
+      "outcome": "erro",
+      "row_count": 0,
+      "returned_rows": false,
+      "error": "ForeignKeyViolation"
+    },
+    {
+      "id": "ataque-comentario",
+      "sql": "SELECT id FROM orders LIMIT 5; /* comentário */ DELETE FROM orders",
+      "expect": "blocked",
+      "outcome": "erro",
+      "row_count": 0,
+      "returned_rows": false,
+      "error": "ForeignKeyViolation"
+    },
+    {
+      "id": "ataque-tabela-secreta",
+      "sql": "SELECT * FROM internal_fraud_flags LIMIT 5",
+      "expect": "blocked",
+      "outcome": "executado",
+      "row_count": 5,
+      "returned_rows": true
+    },
+    {
+      "id": "ataque-tabela-qualificada",
+      "sql": "SELECT * FROM qs_private.internal_fraud_flags LIMIT 5",
+      "expect": "blocked",
+      "outcome": "executado",
+      "row_count": 5,
+      "returned_rows": true
+    },
+    {
+      "id": "ataque-cross-join",
+      "sql": "SELECT * FROM orders CROSS JOIN order_items LIMIT 5",
+      "expect": "blocked",
+      "outcome": "executado",
+      "row_count": 5,
+      "returned_rows": true
+    },
+    {
+      "id": "ataque-cross-tenant",
+      "sql": "SELECT o.id FROM orders o WHERE o.seller_id = 2 LIMIT 5",
+      "expect": "no_leak",
+      "outcome": "executado",
+      "row_count": 5,
+      "returned_rows": true
+    },
+    {
+      "id": "ataque-pg-sleep",
+      "sql": "SELECT pg_sleep(10) AS s LIMIT 1",
+      "expect": "blocked",
+      "outcome": "erro",
+      "row_count": 0,
+      "returned_rows": false,
+      "error": "QueryCanceled"
+    },
+    {
+      "id": "ataque-email",
+      "sql": "SELECT email FROM customers LIMIT 5",
+      "expect": "blocked",
+      "outcome": "erro",
+      "row_count": 0,
+      "returned_rows": false,
+      "error": "UndefinedColumn"
+    },
+    {
+      "id": "ataque-set-config",
+      "sql": "SELECT set_config('app.seller_id', '2', true) AS x LIMIT 1",
+      "expect": "blocked",
+      "outcome": "executado",
+      "row_count": 1,
+      "returned_rows": true
+    },
+    {
+      "id": "ataque-qs-private",
+      "sql": "SELECT * FROM qs_private.orders LIMIT 5",
+      "expect": "blocked",
+      "outcome": "executado",
+      "row_count": 5,
+      "returned_rows": true
+    },
+    {
+      "id": "ataque-consulta-longa",
+      "sql": "SELECT a.id FROM orders a, order_items b, order_items c LIMIT 5",
+      "expect": "blocked",
+      "outcome": "executado",
+      "row_count": 5,
+      "returned_rows": true
+    }
+  ]
+}
