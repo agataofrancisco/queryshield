@@ -64,6 +64,22 @@ class MockGenerator:
 
     def generate(self, question: str, role: Role, model: SemanticModel) -> GenerationOutput:
         text = question.lower()
+        if "apaga" in text or "elimina" in text or "remove" in text:
+            # Demonstração: pedido de escrita. A validação bloqueia (statement_not_allowed).
+            return GenerationOutput(
+                sql="DELETE FROM orders WHERE status = 'cancelled'",
+                tables_used=["orders"],
+                rationale="Pedido de escrita (simulação de pedido não autorizado).",
+            )
+        if "internal_fraud" in text or "fraude" in text:
+            # Demonstração: tabela interna sem vista. A validação bloqueia (table_not_allowed).
+            return GenerationOutput(
+                sql="SELECT * FROM internal_fraud_flags LIMIT 20",
+                tables_used=["internal_fraud_flags"],
+                rationale="Pedido de dados da tabela interna (simulação de pedido não autorizado).",
+            )
+        if "receita" in text and "por mês" in text:
+            return _monthly_revenue(text)
         if "email" in text or "e-mail" in text or "telefone" in text:
             # Simula um pedido indevido de contactos de clientes: a validação tem de o bloquear.
             return GenerationOutput(
@@ -128,3 +144,37 @@ def _period_clause(column: str, period: tuple[date, date] | None) -> str:
     if period is None:
         return ""
     return f" AND {column} >= %(start)s AND {column} < %(end)s"
+
+
+def _monthly_revenue(text: str) -> GenerationOutput:
+    """Receita líquida por mês (gráfico): duas colunas, mês e valor."""
+    year_match = re.search(r"(20\d{2})", text)
+    params: dict[str, str] = {}
+    assumptions: list[str] = []
+    where = ""
+    if year_match:
+        year = int(year_match.group(1))
+        params = {"start": f"{year}-01-01", "end": f"{year + 1}-01-01"}
+        where = " AND o.ordered_on >= %(start)s AND o.ordered_on < %(end)s"
+    else:
+        assumptions.append("Sem ano indicado: considerado todo o histórico disponível.")
+    sql = (
+        "SELECT DATE_TRUNC('month', o.ordered_on)::date AS mes,\n"
+        "       ROUND(SUM(oi.line_total) - SUM(COALESCE(r.refund, 0)), 2) AS receita\n"
+        "FROM orders o\n"
+        "JOIN order_items oi ON oi.order_id = o.id\n"
+        "LEFT JOIN (SELECT order_item_id, SUM(refund_amount) AS refund FROM returns\n"
+        "           GROUP BY order_item_id) r ON r.order_item_id = oi.id\n"
+        f"WHERE o.status IN {VALID_STATUS} AND o.currency = 'AOA'{where}\n"
+        "GROUP BY 1\n"
+        "ORDER BY 1\n"
+        "LIMIT 24"
+    )
+    return GenerationOutput(
+        sql=sql,
+        parameters=params,
+        metrics_used=["receita"],
+        tables_used=["orders", "order_items", "returns"],
+        assumptions=assumptions,
+        rationale="Receita líquida agrupada por mês (para gráfico).",
+    )

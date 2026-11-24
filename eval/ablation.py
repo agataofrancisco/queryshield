@@ -1,8 +1,8 @@
 """Experiência de laboratório: o que a BASE DE DADOS trava quando o validador está desligado.
 
 Só para avaliação (nunca exposto pela API). Executa o SQL de ataque TAL COMO ESTÁ, como
-instrução de topo, com o role qs_reader, numa transacção READ ONLY, com o tenant e o timeout
-definidos como em produção (qs_api.begin_request). A transacção é SEMPRE revertida.
+instrução de topo, com o role de login do vendedor (qs_reader_s<N>), numa transacção READ ONLY
+com o mesmo begin_request que a produção. A transacção é SEMPRE revertida.
 """
 
 from __future__ import annotations
@@ -30,11 +30,12 @@ class RawOutcome:
     detail: str
 
 
-def raw_attempt(reader_dsn: str, sql: str, seller_id: int, timeout_ms: int = 3000) -> RawOutcome:
-    with psycopg.connect(reader_dsn) as conn:
+def raw_attempt(seller_dsn: str, sql: str, timeout_ms: int = 3000) -> RawOutcome:
+    """Executa sql como instrução de topo na ligação do vendedor e reverte sempre."""
+    with psycopg.connect(seller_dsn) as conn:
         try:
             conn.execute("SET TRANSACTION READ ONLY")
-            conn.execute("SELECT qs_api.begin_request(%s, %s)", (seller_id, timeout_ms))
+            conn.execute("SELECT qs_api.begin_request(%s)", (timeout_ms,))
             cursor = conn.execute(sql)
             rows = cursor.fetchall() if cursor.description else []
             if not rows:
