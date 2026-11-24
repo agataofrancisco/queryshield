@@ -52,7 +52,7 @@
 - [x] 8.1 Dockerfiles, `docker-compose.yml` (marcado como não testado localmente) e CI com o Postgres service (Ruff, pytest incluindo `-m postgres`, avaliação mock, build do frontend); verificar a validade do workflow
 - [x] 8.2 `README.md`, `docs/architecture.md`, `docs/decisions.md` e `docs/case-study.md`; verificar os comandos
 - [x] 8.3 `docs/learn/10-perguntas-de-entrevista.md` (≥25); verificar a consistência
-- [ ] 8.4 Revisão de segurança independente (credenciais, RLS, validador, exposição do endpoint); verificar que os achados estão resolvidos ou documentados
+- [x] 8.4 Revisão de segurança independente; achados e limites de validação documentados em `docs/security-review-independent.md`
 
 ## Workflow follow-up
 
