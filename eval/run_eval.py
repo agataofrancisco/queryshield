@@ -4,7 +4,7 @@ Perguntas: geração (mock) -> validação -> verificação -> execução com o 
 -> comparação normalizada com o golden. Ataques: validador, depois a experiência de laboratório
 (ablation) para ver qual camada travou cada um.
 
-Uso (com QS_READER_DSN definido e eval/expected.jsonl gerado): python -m eval.run_eval
+Uso (com QS_READER_DSN_TEMPLATE definido e eval/expected.jsonl gerado): python -m eval.run_eval
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from backend.app.config import DEFAULT_SEMANTIC_DIR
+from backend.app.config import DEFAULT_SEMANTIC_DIR, Settings, seller_dsn
 from backend.app.execution.errors import ExecutionError
-from backend.app.execution.executor import QueryExecutor
+from backend.app.execution.executor import SellerExecutors
 from backend.app.generation.mock import MockGenerator
 from backend.app.generation.models import GenerationError
 from backend.app.generation.service import build_proposal
@@ -65,7 +65,7 @@ def _answer_question(
     q: dict[str, Any],
     model: Any,
     generator: MockGenerator,
-    executor: QueryExecutor,
+    executor: SellerExecutors,
     expected: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     role = Role(q["role"])
@@ -120,7 +120,9 @@ def _answer_question(
     return record
 
 
-def _run_attack(q: dict[str, Any], model: Any, reader_dsn: str) -> dict[str, Any]:
+def _run_attack(
+    q: dict[str, Any], model: Any, template: str, seller_passwords: dict[int, str]
+) -> dict[str, Any]:
     """Ataque: 1) validador; 2) se passou, experiência de laboratório com o validador ignorado.
 
     Passa se: o validador travar; ou a base de dados travar; ou (no_leak) não devolver linhas.
@@ -132,7 +134,7 @@ def _run_attack(q: dict[str, Any], model: Any, reader_dsn: str) -> dict[str, Any
         validator_layer = "não bloqueado pelo validador"
     else:
         validator_layer = "validador: " + ", ".join(sorted({i.code for i in check.issues}))
-    raw = raw_attempt(reader_dsn, sql, int(q["seller_id"]))
+    raw = raw_attempt(seller_dsn(template, int(q["seller_id"]), seller_passwords), sql)
     if check.ok:
         passed = raw.blocked or raw.row_count == 0
         if q["expect"] == "blocked":
@@ -152,12 +154,18 @@ def _run_attack(q: dict[str, Any], model: Any, reader_dsn: str) -> dict[str, Any
     }
 
 
-def run(conninfo: str, provider: str = "mock") -> dict[str, Any]:
+def run(template: str, seller_passwords: dict[int, str], provider: str = "mock") -> dict[str, Any]:
     model = load_semantic_model(DEFAULT_SEMANTIC_DIR)
     expected = _load_expected(EXPECTED_PATH)
     generator = MockGenerator()
-    executor = QueryExecutor(
-        conninfo, statement_timeout_ms=3000, max_rows=500, max_result_bytes=1_000_000
+    executor = SellerExecutors(
+        template,
+        (1, 2, 3),
+        statement_timeout_ms=3000,
+        max_rows=500,
+        max_result_bytes=1_000_000,
+        deadline_margin_ms=1000,
+        seller_passwords=seller_passwords,
     )
     executor.open()
     questions = load_questions(QUESTIONS_PATH)
@@ -166,7 +174,7 @@ def run(conninfo: str, provider: str = "mock") -> dict[str, Any]:
     try:
         for q in questions:
             if q["attack_sql"]:
-                attacks.append(_run_attack(q, model, conninfo))
+                attacks.append(_run_attack(q, model, template, seller_passwords))
             else:
                 answered.append(_answer_question(q, model, generator, executor, expected))
     finally:
@@ -229,11 +237,14 @@ def _ratio(numerator: int, denominator: int) -> float | None:
 
 
 def main() -> int:
-    conninfo = os.environ.get("QS_READER_DSN", "")
-    if not conninfo or not EXPECTED_PATH.exists():
-        print("Defina QS_READER_DSN e gere eval/expected.jsonl (python -m eval.build_expected).")
+    settings = Settings.from_env(os.environ)
+    if not settings.reader_dsn_template or not EXPECTED_PATH.exists():
+        print(
+            "Defina QS_READER_DSN_TEMPLATE e gere eval/expected.jsonl "
+            "(python -m eval.build_expected)."
+        )
         return 2
-    report = run(conninfo)
+    report = run(settings.reader_dsn_template, dict(settings.seller_passwords))
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     path = REPORTS_DIR / f"report-{report['provider']}.json"
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -2,7 +2,7 @@
 
 O statement_timeout da base de dados pode ser aumentado por SQL na mesma sessão (achado A7).
 Este guarda arma um temporizador para o backend concreto e, se o prazo expirar com a instrução
-ainda em curso, cancela-o com pg_cancel_backend através de uma ligação admin separada.
+ainda em curso, cancela-o com pg_cancel_backend usando o mesmo role de vendedor.
 
 Garantias:
   * só cancela se a instrução ainda estiver em curso (um lock impede cancelar a seguinte);
@@ -20,8 +20,8 @@ import psycopg
 
 
 class DeadlineGuard:
-    def __init__(self, cancel_dsn: str, backend_pid: int, seconds: float) -> None:
-        self._cancel_dsn = cancel_dsn
+    def __init__(self, conninfo: str, backend_pid: int, seconds: float) -> None:
+        self._conninfo = conninfo
         self._pid = int(backend_pid)
         self._seconds = float(seconds)
         self._lock = threading.Lock()
@@ -52,8 +52,8 @@ class DeadlineGuard:
                 return
             self.fired = True
             try:
-                with psycopg.connect(self._cancel_dsn, autocommit=True, connect_timeout=3) as admin:
-                    admin.execute("SELECT pg_cancel_backend(%s)", (self._pid,))
+                with psycopg.connect(self._conninfo, autocommit=True, connect_timeout=3) as conn:
+                    conn.execute("SELECT pg_cancel_backend(%s)", (self._pid,))
             except psycopg.Error:
                 # Sem detalhes: o timeout da base de dados continua a ser a barreira seguinte.
                 return

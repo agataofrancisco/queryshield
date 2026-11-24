@@ -25,15 +25,17 @@ do pipeline de 7 passos (`docs/learn/00-visao-geral.md`).
 | 2 | Semantic layer por papel | `semantic/`, `backend/app/semantic/` | o modelo ver colunas ou tabelas que não deve |
 | 3 | Validador AST | `backend/app/validation/` | escrita, multi-statement, tabelas e funções não permitidas, produtos cartesianos |
 | 4 | Verificação semântica | `backend/app/verification/` | respostas com a métrica errada ou fan-out (sem bloquear) |
-| 5 | Executor com `qs_reader` | `backend/app/execution/` | escrita, timeout, excesso de linhas, erros com detalhes de infra |
-| 6 | Base de dados | `db/migrations/` | sem privilégios de escrita; sem PII (vistas); RLS por vendedor; tenant só via `begin_request` |
+| 5 | Executor com uma pool por role de vendedor | `backend/app/execution/` | escrita, timeout, excesso de linhas, erros com detalhes de infra |
+| 6 | Base de dados | `db/migrations/` | sem privilégios de escrita; sem PII (vistas); RLS por `session_user` |
 
 ## Modelo de dados
 
 - Tabelas de negócio em `qs_private` (dono `qs_app`, `FORCE ROW LEVEL SECURITY`).
 - Vistas públicas em `qs_api` com colunas explícitas; `customers` sem email nem telefone;
   `internal_fraud_flags` sem vista.
-- `qs_reader` tem `SELECT` só nas vistas, `default_transaction_read_only = on` e `search_path = qs_api`.
+- `qs_reader_s1..s3` têm `SELECT` só nas vistas, `default_transaction_read_only = on` e
+  `search_path = qs_api`. A migração 006 associa cada role ao seu vendedor e a migração 007 faz a RLS
+  derivar a visibilidade de `session_user`, mesmo através das vistas; a API exige um segredo distinto.
 
 ## Fluxo de um pedido de execução
 
@@ -49,10 +51,10 @@ sequenceDiagram
     V-->>A: ok / issues
     A->>A: hash diferente? -> 409 not_validated
     A->>E: execute (canonical_sql, tenant)
-    E->>D: SET TRANSACTION READ ONLY
-    E->>D: SELECT qs_api.begin_request(tenant, timeout)
+    E->>D: ligação qs_reader_sN, SET TRANSACTION READ ONLY
+    E->>D: SELECT qs_api.begin_request(timeout)
     E->>D: SELECT * FROM (sql) AS qs_result LIMIT n+1
-    D-->>E: linhas (RLS aplicada)
+    D-->>E: linhas (RLS aplica session_user)
     E-->>A: resultado normalizado
     A-->>C: linhas, avisos, verified, explicação
 ```

@@ -5,7 +5,7 @@
 - [x] 1.1 Criar `backend/app/{api,auth,semantic,generation,validation,execution,verification}`, `db/`, `frontend/`, `eval/` e `docs/learn/`; verificar com `git status`
 - [x] 1.2 Confirmar e fixar versões (FastAPI, Pydantic v2, SQLGlot, psycopg 3, httpx, pytest, Ruff); verificar a instalação
 - [x] 1.3 Instalar ou ligar o PostgreSQL e documentar o procedimento no Windows; verificar com `psql -c "select version()"`
-- [x] 1.4 Criar as migrações SQL: schema (10 tabelas com FKs), roles `qs_app`/`qs_reader`, views por papel, RLS e grants; verificar com testes `-m postgres` de que o `qs_reader` não escreve, não lê a tabela secreta e só vê o seu vendedor
+- [ ] 1.4 Criar as migrações SQL: schema (10 tabelas com FKs), roles `qs_app`/`qs_reader_s<N>`, views, RLS por `session_user` e grants; verificar com testes `-m postgres` de ausência de escrita, acesso à tabela secreta e leitura cross-seller (migração 007 ainda pendente de validação runtime)
 - [x] 1.5 Criar o seed determinístico com os casos difíceis; verificar que dois seeds com a mesma seed produzem contagens idênticas
 - [x] 1.6 Escrever `docs/learn/04-roles-grants-views.md` e `05-row-level-security.md`; verificar que cada afirmação tem um teste
 
@@ -24,7 +24,7 @@
 ## 4. Geração e execução
 
 - [x] 4.1 Implementar o provider compatível com OpenAI e o mock determinístico, o prompt com schema por papel e o parsing estruturado com `needs_clarification`; verificar com testes de pergunta simples, ambígua e injecção
-- [x] 4.2 Implementar o executor (pool `qs_reader`, transacção READ ONLY, `SET LOCAL` de timeout e seller, LIMIT forçado, `not_validated`, erros sem credenciais); verificar com testes `-m postgres` de timeout, cross-tenant e escrita com validador desligado
+- [ ] 4.2 Implementar o executor (pool por `qs_reader_s<N>`, transacção READ ONLY, timeout, deadline, LIMIT forçado, `not_validated`, erros sem credenciais); verificar com testes `-m postgres` de timeout, cross-seller e escrita com validador desligado (ajuste do cancelamento ainda pendente de validação runtime)
 - [x] 4.3 Expor `POST /query/generate`, `POST /query/execute`, `GET /query/history` e `GET /health`; verificar com testes de API e isolamento de histórico
 - [x] 4.4 Escrever `docs/learn/02-text-to-sql-com-llms.md` e `06-timeouts-e-limites.md`; verificar a consistência com o código
 

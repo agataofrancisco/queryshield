@@ -30,7 +30,7 @@ def main() -> None:
     version = psycopg.connect(admin_dsn).execute("SELECT version()").fetchone()[0]
     print(f"PostgreSQL ativo: {version.split(',')[0]}")
     print(f"QS_ADMIN_DSN={admin_dsn}")
-    print("Defina também QS_READER_PASSWORD e QS_READER_DSN (ver README).")
+    print("Defina também QS_READER_PASSWORD_S1..S3 e QS_READER_DSN_TEMPLATE (ver README).")
 
 
 if __name__ == "__main__":

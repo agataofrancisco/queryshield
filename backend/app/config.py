@@ -60,7 +60,9 @@ def _parse_seller_ids(raw: str | None) -> tuple[int, ...]:
 
 
 def _parse_seller_passwords(env: Mapping[str, str], seller_ids: tuple[int, ...]) -> dict[int, str]:
-    passwords = {seller_id: env.get(f"QS_READER_PASSWORD_S{seller_id}", "") for seller_id in seller_ids}
+    passwords = {
+        seller_id: env.get(f"QS_READER_PASSWORD_S{seller_id}", "") for seller_id in seller_ids
+    }
     if any(len(password) < 24 for password in passwords.values()):
         raise ConfigError("defina passwords distintas com pelo menos 24 caracteres para cada role")
     if len(set(passwords.values())) != len(passwords):
@@ -77,15 +79,14 @@ def seller_dsn(
     template: str, seller_id: int, passwords: Mapping[int, str] | None = None
 ) -> str:
     """Materializa a ligação de um vendedor, sem reutilizar credenciais entre roles."""
-    if "{role}" not in template:
-        raise ConfigError("QS_READER_DSN_TEMPLATE tem de conter {role}")
-    dsn = template.replace("{role}", seller_role_name(seller_id))
-    if "{password}" in dsn:
-        password = (passwords or {}).get(seller_id)
-        if not password:
-            raise ConfigError(f"password não configurada para o role do vendedor {seller_id}")
-        dsn = dsn.replace("{password}", quote(password, safe=""))
-    return dsn
+    if "{role}" not in template or "{password}" not in template:
+        raise ConfigError("QS_READER_DSN_TEMPLATE tem de conter {role} e {password}")
+    password = (passwords or {}).get(seller_id)
+    if not password:
+        raise ConfigError(f"password não configurada para o role do vendedor {seller_id}")
+    return template.replace("{role}", seller_role_name(seller_id)).replace(
+        "{password}", quote(password, safe="")
+    )
 
 
 @dataclass(frozen=True)
@@ -115,6 +116,18 @@ class Settings:
             raise ConfigError(
                 f"QS_JWT_SECRET deve ter pelo menos {DEV_JWT_SECRET_MIN_LENGTH} caracteres"
             )
+        if self.reader_dsn_template is not None:
+            if (
+                "{role}" not in self.reader_dsn_template
+                or "{password}" not in self.reader_dsn_template
+            ):
+                raise ConfigError("QS_READER_DSN_TEMPLATE tem de conter {role} e {password}")
+            if set(self.seller_passwords) != set(self.seller_ids):
+                raise ConfigError("defina uma password para cada vendedor configurado")
+            if any(len(value) < 24 for value in self.seller_passwords.values()):
+                raise ConfigError("cada password de vendedor deve ter pelo menos 24 caracteres")
+            if len(set(self.seller_passwords.values())) != len(self.seller_passwords):
+                raise ConfigError("cada role de vendedor tem de usar uma password diferente")
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Settings:

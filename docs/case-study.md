@@ -15,7 +15,7 @@ Um pipeline de 7 passos sobre um marketplace fictício (Kianda Market, 3 vendedo
 2. contexto do schema permitido ao papel (semantic layer em YAML);
 3. geração de SQL estruturado, sem execução;
 4. validação AST com SQLGlot (multi-statement, escrita, allowlists, joins, produtos cartesianos, limites);
-5. execução com um role só de leitura, RLS por vendedor, timeout e limite de linhas;
+5. execução com um role e credencial distintos por vendedor, RLS por `session_user`, timeout e limite de linhas;
 6. preview, explicação e plano de execução sem `ANALYZE`;
 7. verificação semântica (definição de métricas e fan-out).
 
@@ -44,8 +44,10 @@ Todos os números vêm de `eval/reports/` e dos testes. O gerador é um **mock d
 
 ## O que correu mal e como foi tratado
 
-- **Falha de segurança encontrada em revisão:** `qs_reader` podia mudar o tenant com `set_config` no SQL
-  gerado. Corrigido com a migração 005 e testado (`test_reader_cannot_change_tenant_with_set_config`).
+- **Falha de segurança encontrada em revisão:** o role comum podia mudar o tenant com `set_config` no
+  SQL gerado. A migração 006 substitui a identidade de sessão por um role de login por vendedor, e a
+  API agora exige segredos distintos. A configuração estática está implementada; a verificação da
+  migrações 006–007 e do cancelamento de consultas ainda depende de execução PostgreSQL em runtime.
 - **Golden não determinístico:** `ORDER BY ... LIMIT` com empates. A regeneração byte a byte detectou-o.
 - **Baseline inútil à primeira execução:** quase todos os ataques falhavam por nomes não resolvidos, o que
   não mediria segurança. Corrigido: a sessão resolve os nomes como a app e a sandbox não tem RLS. Os sete
@@ -59,11 +61,10 @@ Todos os números vêm de `eval/reports/` e dos testes. O gerador é um **mock d
 ## Limitações honestas
 
 - Não há avaliação com um modelo de linguagem real. A accuracy descreve um gerador de regras.
-- Dois achados de segurança de severidade média continuam abertos (A1, A2 em `docs/security-review.md`):
-  o tenant pode ser alterado por SQL na mesma transacção. No caminho da API isto é bloqueado pelo embrulho
-  e pelo validador, mas a base de dados não o impede sozinha.
-- A revisão de segurança independente (tarefa 8.4) não foi feita por outra pessoa; o documento
-  `docs/security-review.md` é uma auto-revisão, e fica pendente para o supervisor.
+- A revisão independente está em `docs/security-review-independent.md`. O desenho de roles por vendedor
+  corrige A1/A2 no código; o estado só deve ser encerrado após verificação integrada em PostgreSQL.
+- O processo da API recebe os três segredos de vendedor; uma intrusão na API pode aceder a todos. Para
+  reduzir esse raio de impacto, separar a implantação e o armazenamento de segredos por vendedor.
 - O validador é mais estrito do que a base de dados: recusa consultas legítimas sem `LIMIT` e pesquisas com
   `LIKE`. São escolhas conscientes, documentadas em `docs/decisions.md`.
 - Docker, compose e CI não foram executados (validados só como YAML).

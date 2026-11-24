@@ -22,8 +22,8 @@ Quatro camadas independentes, de dentro para fora:
 
 1. **Autenticação e papel** (`backend/app/auth`): o tenant vem de um token assinado.
 2. **Validador AST** (`backend/app/validation`, doc 03): decide o que o SQL *pode dizer*.
-3. **Executor com role de leitura** (`backend/app/execution`, doc 06): `qs_reader`, `READ ONLY`, timeout, limite de linhas.
-4. **Base de dados** (`db/migrations`, docs 04 e 05): privilégios, vistas sem PII, RLS por vendedor, `begin_request` uma vez por transacção.
+3. **Executor com role de leitura** (`backend/app/execution`, doc 06): um role `qs_reader_s<N>` por vendedor, `READ ONLY`, timeout, limite de linhas.
+4. **Base de dados** (`db/migrations`, docs 04 e 05): privilégios, vistas sem PII e RLS por `session_user`; `begin_request` só define timeout.
 
 A experiência de laboratório (`eval/ablation.py`) corre o SQL de ataque **sem a camada 2**, como instrução de topo, com o role e o tenant reais. Mede assim o que as camadas 3 e 4 travam sozinhas.
 
@@ -53,7 +53,7 @@ Leitura: o validador trava 14 dos 15. A base de dados, sozinha, trava 12. Os tr�
 
 - **Camadas independentes, medidas uma a uma.** Cada uma tem testes próprios: o validador em `tests/unit/test_validator.py`, a base de dados em `tests/postgres/` com o validador ignorado.
 - **Não confiar no validador.** Cada ataque que o validador trava também é tentado sem ele. Se a base de dados não travasse, a segurança dependeria só do parser SQLGlot, cuja divergência com o PostgreSQL é o limite conhecido (doc 03).
-- **Medir com o mesmo papel e tenant.** A experiência usa o `qs_reader` e `begin_request` como em produção; não usa um superuser, que contornaria tudo.
+- **Medir com o mesmo papel e tenant.** A experiência usa o role `qs_reader_s<N>` e a RLS por `session_user` como em produção; não usa um superuser, que contornaria tudo.
 
 ## Alternativas
 

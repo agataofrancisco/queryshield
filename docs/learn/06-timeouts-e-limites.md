@@ -30,19 +30,19 @@ Notas sobre a saída: a linha 3 é `execution_failed` e não `read_only_violatio
 
 Caminho de uma execução (`backend/app/execution/executor.py`):
 
-1. **Ligação do pool.** `ConnectionPool` com `qs_reader` (`QueryExecutor.__init__`). A ligação nunca é de superuser.
+1. **Ligação do pool.** `ConnectionPool` com o role do vendedor (`qs_reader_s<N>`). A ligação nunca é de superuser e cada pool tem uma credencial própria.
 2. **Transacção explícita** (`execute`, `with conn.transaction()`), para que nada corra fora dela.
 3. **`SET TRANSACTION READ ONLY`** como primeira instrução (`_enter_read_only`, linha ~118).
-4. **`qs_api.begin_request(seller, timeout_ms)`**: define o tenant e o `statement_timeout` **locais à transacção** e só pode ser chamada uma vez (migração 005).
+4. **`qs_api.begin_request(timeout_ms)`**: define apenas o `statement_timeout` local à transacção. A RLS deriva o vendedor de `session_user` através do mapeamento das migrações 006–007.
 5. **Limite de linhas por embrulho.** O SQL validado é embrulhado: `SELECT * FROM (<sql>) AS qs_result LIMIT <max_rows + 1>`. Pedir mais uma linha permite saber se houve truncagem sem contar tudo.
 6. **Tamanho do resultado.** Depois de converter os valores, a soma do tamanho do texto é comparada com `max_result_bytes`; acima disso, `result_too_large`.
 7. **Tradução de erros** (`_translate`, linha ~142). Cada classe de erro do driver vira um código: `QueryCanceled` → `query_timeout`, `InsufficientPrivilege` → `permission_denied`, `ReadOnlySqlTransaction` → `read_only_violation`, falha de ligação → `database_unavailable`, outros → `execution_failed`. A mensagem do driver **nunca** é devolvida.
 
-Para `EXPLAIN` (`explain`), o caminho é o mesmo sem o embrulho e sem `ANALYZE`. A linha `Filter: (seller_id = ... current_setting('app.seller_id'))` no plano mostra que a RLS é aplicada mesmo no plano, o que se verificou na execução real.
+Para `EXPLAIN` (`explain`), o caminho é o mesmo sem o embrulho e sem `ANALYZE`. A RLS limita as linhas ao vendedor correspondente ao role da ligação.
 
 ## Porquê esta escolha
 
-- **Três camadas de tempo e tamanho.** O `statement_timeout` por transacção (3 s por omissão, configurável entre 100 ms e 10 s), o padrão `ALTER ROLE ... SET statement_timeout = '3s'` como backstop (migração 001), e o `idle_in_transaction_session_timeout` de 10 s para não deixar transacções abertas.
+- **Prazo em duas camadas.** O `statement_timeout` na transacção e um `DeadlineGuard` na aplicação. O guarda cancela a consulta pela ligação do mesmo role de vendedor, sem DSN administrativo no processo da API.
 - **`LIMIT max_rows + 1` em vez de contar.** Contar o resultado todo custaria uma segunda execução. Pedir uma linha a mais é barato e responde à pergunta "houve mais?".
 - **Embrulho em subquery.** O SQL validado não é reescrito pelo executor: o embrulho é externo. Isto evita que um `LIMIT` interno do utilizador conflite com o limite do sistema.
 - **Erros genéricos.** Uma mensagem como "could not connect to host X as user Y" revelaria a infra a quem está a testar o sistema. O código (`database_unavailable`) é suficiente para a API e para o frontend.

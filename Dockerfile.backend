@@ -17,7 +17,7 @@ COPY semantic ./semantic
 RUN pip install --no-cache-dir .
 
 # Utilizador sem privilégios. Nenhuma credencial é copiada para a imagem:
-# QS_READER_DSN, QS_JWT_SECRET e QS_LLM_API_KEY são injectados em runtime.
+# QS_READER_DSN_TEMPLATE, QS_READER_PASSWORD_S1..S3, QS_JWT_SECRET e QS_LLM_API_KEY vêm do runtime.
 RUN useradd --create-home --uid 10001 qs
 USER qs
 

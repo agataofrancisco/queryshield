@@ -3,8 +3,8 @@
 -- Porquê: o tenant era uma definição de sessão (app.seller_id). Qualquer SQL na sessão a podia
 -- mudar com SET (achado A1 de docs/security-review.md). Agora a identidade é o próprio role:
 --  * qs_reader_s1..s3: LOGIN, NOINHERIT, sem membership em nenhum outro role, read-only por omissão.
---    A RLS compara seller_id com o vendedor associado a current_user. SET ROLE, SET SESSION
---    AUTHORIZATION e RESET ROLE não mudam current_user sem membership, e os roles não têm nenhuma.
+--    Esta migração inicial compara seller_id com current_user. A migração 007 muda a política
+--    final para session_user, que continua a identificar o login ao passar pelas vistas.
 --  * qs_private.seller_roles(role_name, seller_id): mapeamento legível pelos roles de vendedor.
 --  * qs_api.begin_request(timeout_ms): só define o statement_timeout local à transacção. Já não
 --    recebe nem define o tenant.

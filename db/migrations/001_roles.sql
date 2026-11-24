@@ -2,9 +2,9 @@
 -- Executado como superuser local (QS_ADMIN_DSN) por db/migrate.py.
 --
 -- qs_app    : dono de todos os objectos (NOLOGIN). Nunca usado pela aplicação em runtime.
--- qs_reader : único role usado pelo executor. Só lê as vistas de qs_api, sem escrita
---             e com default_transaction_read_only ligado. A password é definida por
---             db/migrate.py a partir de QS_READER_PASSWORD (nunca escrita neste ficheiro).
+-- qs_reader : role histórico do primeiro desenho do executor. A migração 006 desactiva
+--             o login e cria um role por vendedor. Passwords nunca ficam no SQL;
+--             db/migrate.py define QS_READER_PASSWORD_S1..S3 no runtime.
 
 DO $$
 BEGIN

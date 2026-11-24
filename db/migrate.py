@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 import psycopg
@@ -25,20 +26,15 @@ def read_migration_files() -> list[Path]:
     return sorted(MIGRATIONS_DIR.glob("*.sql"))
 
 
-def apply_migrations(admin_dsn: str, reader_password: str | dict[int, str]) -> list[str]:
+def apply_migrations(admin_dsn: str, reader_passwords: Mapping[int, str]) -> list[str]:
     """Aplica as migrações pendentes, por ordem, cada uma numa transacção.
 
     Devolve os nomes das migrações aplicadas nesta execução.
     """
-    distinct_credentials_required = isinstance(reader_password, dict)
-    passwords = (
-        reader_password
-        if distinct_credentials_required
-        else {seller_id: reader_password for seller_id in range(1, 4)}
-    )
+    passwords = dict(reader_passwords)
     if set(passwords) != {1, 2, 3} or any(len(passwords[sid]) < 24 for sid in (1, 2, 3)):
         raise ValueError("defina passwords com pelo menos 24 caracteres para cada vendedor.")
-    if distinct_credentials_required and len(set(passwords.values())) != 3:
+    if len(set(passwords.values())) != 3:
         raise ValueError("cada role de vendedor tem de usar uma password diferente.")
     applied: list[str] = []
     with psycopg.connect(admin_dsn) as conn:

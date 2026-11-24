@@ -49,7 +49,7 @@ Estado por passo (2026-11-24):
 | 2 Contexto por papel | feito | `backend/app/semantic/view.py`, `semantic/schema.yaml` |
 | 3 Gerar SQL | implementado | `backend/app/generation/`, `backend/app/api/routes_query.py` |
 | 4 Validar AST | implementado | `backend/app/validation/`, `POST /query/validate` |
-| 5 Executar | implementado; uma pool por role de vendedor | `backend/app/execution/`, migração `006_per_seller_roles.sql` |
+| 5 Executar | implementado; uma pool por role de vendedor | `backend/app/execution/`, migrações `006` e `007` |
 | 6 Preview | implementado | `backend/app/api/routes_query.py`, frontend React |
 | 7 Verificar | implementado | `backend/app/verification/` |
 

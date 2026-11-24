@@ -2,94 +2,134 @@
 
 ## O problema
 
-O Kianda Market é multi-vendedor: cada `seller_id` é um tenant e um vendedor não pode ver as encomendas de outro. Um LLM que gera SQL pode, por erro ou por injecção, escrever `WHERE seller_id = 2`, ou simplesmente esquecer o filtro. Se o isolamento depender de o SQL gerado incluir o filtro certo, **o isolamento é uma sugestão**.
+O Kianda Market é multi-vendedor: cada `seller_id` é um tenant e um vendedor não pode ver as encomendas de
+outro. Um LLM que gera SQL pode, por erro ou por injecção, escrever `WHERE seller_id = 2`, ou simplesmente
+esquecer o filtro. Se o isolamento depender do SQL gerado, **o isolamento é uma sugestão**.
 
-Queremos que o isolamento seja uma garantia da base de dados, aplicada a cada linha, independentemente do SQL.
+Queremos que o isolamento seja uma garantia da base de dados, aplicada a cada linha, **e** que nenhum SQL da
+sessão consiga mudar de vendedor.
 
 ## O que entra e o que sai
 
-Entra: o SQL gerado e o tenant autenticado, definido pelo servidor com `qs_api.begin_request(seller, timeout)`. Sai: apenas as linhas desse tenant.
+Entra: o SQL gerado, e a ligação do executor, que é um role de login por vendedor (`qs_reader_s1`, `_s2`, `_s3`).
+Sai: apenas as linhas desse vendedor.
 
-Saída real (ligação `qs_reader`, mesma base de desenvolvimento):
+Saída real registada depois da migração 006 (antes da 007):
 
 ```
-2 orders sem tenant: [(0,)]
-3 orders com tenant 1: [(700, 1, 1)]
-4 orders WHERE seller_id=2: [(0,)]
+user: [('qs_reader_s1',)]
+orders seller visibility: [(700, 1, 1)]
+mapping: [('qs_reader_s1', 1), ('qs_reader_s2', 2), ('qs_reader_s3', 3)]
+SET app.seller_id = '2'                    -> ok
+SET ROLE qs_app                            -> ERR InsufficientPrivilege: permission denied to set role "qs_app"
+RESET ROLE                                 -> ok
+SET SESSION AUTHORIZATION postgres         -> ERR InsufficientPrivilege: permission denied to set session authorization
+SET ROLE qs_reader_s2                      -> ERR InsufficientPrivilege: permission denied to set role "qs_reader_s2"
+SELECT set_config('app.seller_id','2',true) -> ERR InsufficientPrivilege: permission denied for function set_config
+SELECT count(*) FROM qs_private.internal_fraud_flags -> ERR InsufficientPrivilege: permission denied for table internal_fraud_flags
+after attacks, visibility: [(700, 1, 1)] user: [('qs_reader_s1',)]
+insert: ERR ReadOnlySqlTransaction: cannot execute INSERT in a read-only transaction
 ```
 
-- Sem tenant definido, a consulta devolve **zero** linhas (fail-closed). Não há erro e não há fuga.
-- Com tenant 1, o `min` e o `max` de `seller_id` são ambos 1. O filtro `seller_id = 2` escrito pelo SQL gerado não mostra nada que não seja do tenant 1.
+Leitura: `SET app.seller_id = '2'` executa, mas não muda nada. A visibilidade continua nas 700 linhas do
+vendedor 1 depois de todos os ataques.
 
 ## Como funciona por dentro
 
-- `db/migrations/003_rls.sql:14-17` define `qs_private.current_seller_id()`: lê `app.seller_id` com `current_setting(..., true)` (missing_ok) e devolve `NULL` quando não está definido ou é vazio. `NULL` nunca é igual a um `seller_id`, por isso a política dá falso sem erro.
-- `003_rls.sql:20-21` activa RLS e **`FORCE ROW LEVEL SECURITY`** em cada tabela de negócio. A política é `USING (seller_id = qs_private.current_seller_id())` e o mesmo predicado em `WITH CHECK`, para que escritas (que não existem para o reader) também fiquem limitadas ao tenant.
-- O executor (`backend/app/execution/executor.py:118-122`) chama `SELECT qs_api.begin_request(%s, %s)` **dentro** da transacção, antes de qualquer SQL do utilizador. A função (migração `db/migrations/005_request_scope.sql`) faz `set_config(..., true)`: a definição é local à transacção e no commit ou rollback volta a `''`. Esta é a propriedade que torna o pool de ligações seguro (ver teste abaixo).
-- **Porque não `set_config` directamente.** Antes da migração 005, `qs_reader` podia chamar `set_config('app.seller_id', '2', true)` no próprio SQL gerado e mudar de tenant dentro da transacção. Esta falha foi encontrada ao rever as ameaças do executor com o validador desligado. A correcção: `EXECUTE` em `set_config` é retirado do `PUBLIC` (concedido só ao dono `qs_app`), e `begin_request` é `SECURITY DEFINER`, só pode ser chamada uma vez por transacção (flag local `qs.request_started`) e é chamada pelo executor antes do SQL do utilizador. Os testes `test_reader_cannot_change_tenant_with_set_config` e `test_request_scope_can_only_start_once_per_transaction` (em `tests/postgres/test_roles_rls.py`) e `test_sql_cannot_change_the_tenant_inside_the_transaction` (em `tests/postgres/test_executor.py`) provam o comportamento.
-- O `SET LOCAL app.seller_id = %s` não serve, porque `SET` não aceita parâmetros ligados. `set_config` é a forma parametrizada.
+**Identidade = role.** Cada vendedor tem um role de login, `qs_reader_s<N>`, criado em
+`db/migrations/006_per_seller_roles.sql`. Estes roles são `NOINHERIT` e não são membros de nenhum outro role.
+Por isso `SET ROLE`, `SET SESSION AUTHORIZATION` e `RESET ROLE` não lhes dão outra identidade.
 
-### Porque é que `FORCE` é necessário
+**Mapeamento.** `qs_private.seller_roles(role_name, seller_id)` diz qual é o vendedor de cada role. Os roles de
+vendedor têm `SELECT` nesta tabela (e `USAGE` no schema), e nada mais em `qs_private`.
 
-Sem `FORCE`, o dono de uma tabela contorna RLS. As vistas de `qs_api` pertencem a `qs_app`, que é dono das tabelas base. Sem `FORCE`, uma consulta a `qs_api.orders` executada por `qs_reader` seria avaliada com os privilégios do dono e **não aplicaria a política**. O teste `test_owner_role_is_subject_to_rls_because_of_force` prova o contrário: com `SET LOCAL ROLE qs_app`, sem tenant, a contagem é 0.
+**Política.** Cada tabela de negócio tem uma política que compara o `seller_id` da linha com o vendedor do
+role corrente, lido do mapeamento:
 
-Os superusers continuam a contornar RLS. Por isso `db/seed.py` e `db/migrate.py` correm com a ligação administrativa, e o executor **nunca** usa uma ligação de superuser.
+```sql
+USING (seller_id = (SELECT m.seller_id FROM qs_private.seller_roles AS m
+                    WHERE m.role_name = session_user))
+```
+
+`session_user` é a identidade de login original. É usada deliberadamente porque as políticas RLS de
+tabelas subjacentes a uma vista normal são aplicadas com os privilégios do dono da vista; a identidade
+de login mantém-se a do vendedor. Assim a política funciona também ao ler pelas vistas `qs_api`.
+**Limite da evidência:** a migração 007 aplica esta alteração final, mas ainda não foi executada contra
+PostgreSQL nesta revisão; a saída acima não confirma o estado pós-007.
+
+**`FORCE ROW LEVEL SECURITY`.** Sem `FORCE`, o dono das tabelas (`qs_app`, dono das vistas) contornaria a
+política. O teste `test_owner_role_is_subject_to_rls_because_of_force` verifica que, como `qs_app`, sem mapeamento
+o resultado é zero linhas.
+
+**Superusers.** Contornam RLS. Por isso as migrações e o seed correm com a ligação administrativa, e o executor
+nunca usa uma ligação de superuser.
+
+**Âmbito de pedido.** `qs_api.begin_request(timeout_ms)` só define o `statement_timeout` local à transacção.
+Já não recebe nem define o tenant. A identidade vem do role, e não de uma definição de sessão.
 
 ## Porquê esta escolha
 
-- **Garantia na base de dados.** A política é avaliada em cada linha, para qualquer SQL, incluindo subqueries, CTEs e joins. O SQL não precisa de cooperar.
-- **Fail-closed.** Sem tenant, nada. Um bug que esqueça de definir o tenant falha de forma visível (zero linhas) e não expõe dados.
-- **Âmbito de pedido com pool.** O tenant é local à transacção, por isso não vaza para o próximo pedido que reutiliza a mesma ligação, e só o executor o pode definir.
-- **`WITH CHECK` mesmo sem escrita.** Se um dia o reader ganhar escrita por engano, a política continua a limitar as linhas escritas.
+- **A base de dados decide, com um critério que o SQL não controla.** `session_user` é definido pela
+  autenticação da ligação, não pelo texto do SQL nem pelo contexto do dono da vista.
+- **Sem definições de sessão que o SQL possa alterar.** Antes (migrações 003 a 005) o tenant era `app.seller_id`,
+  e qualquer `SET` no mesmo transacção o mudava. Esse caminho foi removido (achado A1 de `docs/security-review.md`).
+- **Fail-closed.** Um role sem linha no mapeamento não vê nada.
+- **Um pool por vendedor no executor.** Cada pool só tem as credenciais de um role. Um bug que escolha o pool
+  errado dá um vendedor errado, mas não consegue mudar a identidade de uma ligação já aberta.
 
 ## Alternativas
 
-- **Filtrar `seller_id` na aplicação** (acrescentar `WHERE seller_id = ...` ao SQL). Frágil: depende do validador ou de uma reescrita de AST, e falha com subqueries e joins mal feitos.
-- **Uma base de dados por vendedor.** Isolamento forte, mas custo operacional alto e não escala para um marketplace.
-- **Views por vendedor** (`WHERE seller_id = current_setting(...)` na própria vista). Funciona, mas cada alteração de schema obriga a recriar vistas e a RLS já expressa o mesmo predicado de forma centralizada.
+- **Definição de sessão com `set_config`** (a versão anterior). Qualquer SQL na mesma sessão a muda. Descartada.
+- **Tenant guardado numa tabela privada, escrita por função** (tentativa exploratória anterior). A escrita
+  falha em transacções só de leitura. Exigiria duas transacções por pedido e um token. Descartada em favor dos roles.
+- **Uma base de dados por vendedor.** Isolamento forte, custo operacional alto.
+- **Filtrar `seller_id` no SQL gerado.** Depende do SQL. Não é uma garantia.
 
-## Como falha
+## Como falha (e o que ficou por resolver)
 
 Testes em `tests/postgres/test_roles_rls.py`:
 
-- Sem tenant, zero linhas: `test_reader_without_tenant_sees_no_rows`.
-- Apenas o tenant autenticado é visível, comparado com a contagem calculada pelo superuser: `test_reader_sees_only_the_authenticated_tenant`.
-- Filtro manual para outro tenant devolve zero: `test_sql_that_filters_another_tenant_returns_nothing`.
-- Tenant não vaza entre transacções da mesma ligação: `test_tenant_does_not_leak_to_the_next_transaction`.
-- Dono sujeito a RLS por causa de `FORCE`: `test_owner_role_is_subject_to_rls_because_of_force`.
+- Roles de login, sem superuser, sem bypass de RLS, sem herança e sem membership:
+  `test_seller_roles_are_login_roles_that_inherit_nothing`.
+- Cada vendedor vê só as suas linhas: `test_seller_sees_only_its_own_rows`,
+  `test_each_seller_role_sees_only_its_own_rows`.
+- Ataques de sessão com o validador desligado (`SET`, `SET ROLE`, `RESET ROLE`, `SET SESSION AUTHORIZATION`,
+  `set_config`, `begin_request`): `test_raw_session_attacks_cannot_change_visibility`.
+- Cada tabela de negócio tem RLS activa, forçada e uma política: `test_every_business_table_has_rls_enabled_and_forced`.
 
-Modo de falha conhecido: se um dia uma tabela for criada **sem** `ENABLE` e `FORCE`, o isolamento não existe para essa tabela. Por isso o teste `test_every_business_table_has_rls_enabled_and_forced` verifica no catálogo que as 10 tabelas têm RLS activa, forçada e com uma política.
+**Residual.** Quem já executa instruções de topo como `qs_reader_s1` continua a ver as 700 linhas do vendedor 1 e
+nenhuma de outro, porque o role não muda. Não há caminho, por SQL, para a identidade de outro vendedor. O que
+continua a depender do executor e do validador é a *forma* da consulta (produtos cartesianos, funções lentas);
+ver `docs/learn/09-defesa-em-profundidade.md`.
 
 ## Perguntas de entrevista
 
 **1. Porque é que RLS é mais forte do que um filtro no SQL?**
-Porque é aplicada pelo motor a cada linha, depois de o planeador ter decidido o plano, e não depende do texto SQL. Um `OR 1=1`, uma subquery ou um `UNION` não a contornam.
+Porque é aplicada pelo motor a cada linha, depois de o planeador decidir o plano, e não depende do texto SQL.
 
-**2. O que é `FORCE ROW LEVEL SECURITY` e quando é que o dono importa?**
-Por omissão, o dono da tabela não é afectado por RLS. `FORCE` aplica a política também ao dono. Importa quando as vistas são do dono e o reader lê através delas.
+**2. Porque é que a identidade é um role e não uma variável de sessão?**
+Porque uma variável de sessão pode ser alterada por qualquer `SET` na mesma sessão. Um role só muda por
+`SET ROLE`, que exige membership, e os roles de vendedor não têm nenhuma.
 
-**3. Porque é que não se usa `SET LOCAL app.seller_id`?**
-`SET` não aceita parâmetros ligados em PostgreSQL, por isso concatenar o `seller_id` seria injecção. Usamos uma função (`begin_request`) que aceita parâmetros e faz `set_config(..., true)` internamente.
+**3. O que é `FORCE ROW LEVEL SECURITY` e quando é que o dono importa?**
+Aplica a política também ao dono da tabela. Importa quando as vistas são do dono e o reader lê através delas.
 
-**4. O que acontece ao tenant se a transacção falhar?**
-É revertido junto com a transacção. Não é preciso limpar nada.
+**4. Porque é que a RLS usa `session_user`?**
+O acesso às tabelas por uma vista normal avalia as políticas no contexto do dono da vista. `session_user`
+continua a identificar o login original do vendedor; `current_user` pode reflectir o papel efectivo. A
+migração 007 torna explícita esta escolha.
 
-**5. Porque é que o teste de não-vazamento usa a mesma ligação?**
-Porque é o cenário real de um pool: as ligações são reutilizadas. Um teste com ligações novas não prova nada sobre reutilização.
+**5. O que acontece a um role sem linha no mapeamento?**
+Não vê nenhuma linha: a comparação com `NULL` é falsa. É fail-closed.
 
-**6. Porque é que `current_seller_id()` é `STABLE` e não `IMMUTABLE`?**
-Porque lê uma definição de sessão. `IMMUTABLE` permitiria ao planeador reutilizar o resultado entre tenants, o que seria incorrecto.
+**6. Como é que o tenant não vaza entre pedidos no pool?**
+Cada pool só tem as credenciais de um role, e o role de uma ligação não muda. Não há estado de tenant na sessão.
 
-**7. O superuser está sujeito a RLS?**
-Não. Por isso o executor nunca usa uma ligação de superuser, e o seed e as migrações (que precisam de escrever em todos os tenants) usam a ligação administrativa separadamente.
+**7. Porque é que os superusers não são usados pelo executor?**
+Porque contornam RLS. As migrações e o seed precisam de escrever em todos os vendedores, e por isso usam a ligação
+administrativa, separada do executor.
 
-**8. Como provaria que o isolamento não depende do SQL gerado?**
-Com um teste de pedido explícito de outro tenant (`WHERE seller_id = 2`) e com o validador desligado: o resultado continua a ser só o do tenant autenticado. Esse teste é o da tarefa 4.2 (executor com validador desligado), ainda por implementar.
-
-## Limite conhecido (achado aberto)
-
-O tenant continua a ser uma definição de sessão (`app.seller_id`). Dentro da mesma transacção, um
-`SET app.seller_id = '2'` muda o que a RLS devolve: é o teste xfail
-`test_plain_set_of_the_tenant_setting_cannot_change_what_rls_shows`. Uma tentativa de corrigir isto com
-uma tabela privada (migração 006) foi revertida, porque a escrita falha numa transacção só de leitura.
-A correcção exige duas transacções por pedido e um token de pedido. Ver `docs/security-review.md`, A1 e A2.
+**8. Qual é o limite residual deste desenho?**
+A base de dados garante a identidade, não a forma da consulta. Um SQL que escape ao validador e aos limites
+continua a ver só as linhas do seu vendedor, mas pode ser caro. Para isso existem o `statement_timeout`, o prazo da
+aplicação e o limite de linhas.

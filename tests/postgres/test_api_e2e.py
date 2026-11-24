@@ -19,7 +19,8 @@ pytestmark = pytest.mark.postgres
 @pytest.fixture(scope="module")
 def client(pg_env: PgEnv):  # type: ignore[no-untyped-def]
     settings = Settings(
-        reader_dsn=pg_env.reader_dsn,
+        reader_dsn_template=pg_env.reader_template,
+        seller_passwords=pg_env.seller_passwords,
         jwt_secret=TEST_JWT_SECRET,
         demo_auth=True,
         semantic_dir=Path(SEMANTIC_DIR),

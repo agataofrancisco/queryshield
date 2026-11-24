@@ -1,5 +1,9 @@
 # Design
 
+> **Desenho inicial, substituído parcialmente pela migração 006.** O modelo actual usa um role de
+> login por vendedor e RLS por `session_user`; não usa a variável `app.seller_id` descrita abaixo.
+> Para o estado implementado, consultar `docs/architecture.md` e `docs/learn/04-roles-grants-views.md`.
+
 ## Context
 
 O repositório está vazio. Motivação: ver `proposal.md`. Requisitos: ver `specs/`. Este projecto **exige PostgreSQL real**: RLS, roles, `statement_timeout` e transacções só de leitura não têm equivalente fiel em SQLite. Sem Docker, instala-se o Postgres nativamente (ou portable) no Windows, e no CI usa-se um service container.

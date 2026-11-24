@@ -29,7 +29,10 @@ from eval.build_questions import load_questions
 EVAL_DIR = Path(__file__).resolve().parent
 REPORTS_DIR = EVAL_DIR / "reports"
 SANDBOX_DB = "qs_sandbox_insecure_baseline"
-SANDBOX_PASSWORD = "sandbox-only-password"  # só para o role de leitura do sandbox
+SANDBOX_PASSWORDS = {
+    seller_id: f"sandbox-only-seller-{seller_id}-password-24"
+    for seller_id in (1, 2, 3)
+}
 
 
 def _sandbox_admin_dsn(server_dsn: str) -> str:
@@ -73,7 +76,7 @@ def create_sandbox(server_dsn: str) -> str:
         )
         conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(SANDBOX_DB)))
     admin = _sandbox_admin_dsn(server_dsn)
-    apply_migrations(admin, SANDBOX_PASSWORD)
+    apply_migrations(admin, SANDBOX_PASSWORDS)
     load_seed(admin)
     # Baseline ingénua: sem isolamento por vendedor na base (sandbox descartável).
     with psycopg.connect(admin, autocommit=True) as conn:
@@ -132,8 +135,9 @@ def main() -> int:
         "attacks_executed_by_baseline": passed_through,
         "items": results,
     }
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    path = REPORTS_DIR / "baseline-sandbox.json"
+    report_dir = Path(os.environ.get("QS_BASELINE_REPORT_DIR", str(REPORTS_DIR)))
+    report_dir.mkdir(parents=True, exist_ok=True)
+    path = report_dir / "baseline-sandbox.json"
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"baseline: {passed_through}/{len(results)} ataques executados sem protecção -> {path}")
     return 0

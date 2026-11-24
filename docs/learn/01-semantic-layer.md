@@ -34,7 +34,7 @@ O analista não vê `payouts` nem `payments`, e `customers` não tem `email` nem
 
 ### Porque é que o YAML não é o único controlo
 
-O YAML define o que a aplicação *mostra* e *valida*. O que a base de dados *permite* está nas vistas de `db/migrations/004_views.sql`, com isolamento por role/RLS reforçado em `db/migrations/006_per_seller_roles.sql`. Um teste (`tests/postgres/test_semantic_matches_db.py`) compara as vistas com a configuração coluna a coluna: se alguém acrescentar uma coluna ao YAML que a vista não expõe, o teste falha.
+O YAML define o que a aplicação *mostra* e *valida*. O que a base de dados *permite* está nas vistas de `db/migrations/004_views.sql`, com isolamento por role/RLS reforçado nas migrações `006_per_seller_roles.sql` e `007_rls_login_identity.sql`. Um teste (`tests/postgres/test_semantic_matches_db.py`) compara as vistas com a configuração coluna a coluna: se alguém acrescentar uma coluna ao YAML que a vista não expõe, o teste falha.
 
 ## Porquê esta escolha
 

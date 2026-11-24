@@ -3,7 +3,7 @@
 Cada SQL golden passa primeiro pelo validador (se não passar, o build falha): um golden
 inválido não pode tornar-se resultado esperado. A execução usa o mesmo executor de produção.
 
-Uso (com QS_READER_DSN definido): python -m eval.build_expected
+Uso (com QS_READER_DSN_TEMPLATE definido): python -m eval.build_expected
 """
 
 from __future__ import annotations
@@ -13,9 +13,9 @@ import json
 import os
 from pathlib import Path
 
-from backend.app.config import DEFAULT_SEMANTIC_DIR
+from backend.app.config import DEFAULT_SEMANTIC_DIR, Settings
 from backend.app.execution.errors import ExecutionError
-from backend.app.execution.executor import QueryExecutor
+from backend.app.execution.executor import SellerExecutors
 from backend.app.semantic.loader import load_semantic_model
 from backend.app.semantic.models import Role
 from backend.app.validation.ast_validator import validate_sql
@@ -40,14 +40,21 @@ def _jsonable(rows: list[tuple[object, ...]]) -> list[list[object]]:
 
 
 def build_expected(
-    conninfo: str,
+    template: str,
+    seller_passwords: dict[int, str],
     output_path: Path = EXPECTED_PATH,
     questions_path: Path = QUESTIONS_PATH,
     semantic_dir: Path = DEFAULT_SEMANTIC_DIR,
 ) -> int:
     model = load_semantic_model(semantic_dir)
-    executor = QueryExecutor(
-        conninfo, statement_timeout_ms=5000, max_rows=5000, max_result_bytes=50_000_000
+    executor = SellerExecutors(
+        template,
+        (1, 2, 3),
+        statement_timeout_ms=5000,
+        max_rows=5000,
+        max_result_bytes=50_000_000,
+        deadline_margin_ms=1000,
+        seller_passwords=seller_passwords,
     )
     executor.open()
     records: list[str] = []
@@ -89,11 +96,11 @@ def build_expected(
 
 
 def main() -> int:
-    conninfo = os.environ.get("QS_READER_DSN", "")
-    if not conninfo:
-        print("QS_READER_DSN não definido.")
+    settings = Settings.from_env(os.environ)
+    if not settings.reader_dsn_template:
+        print("QS_READER_DSN_TEMPLATE não definido.")
         return 2
-    count = build_expected(conninfo)
+    count = build_expected(settings.reader_dsn_template, dict(settings.seller_passwords))
     print(f"Resultados golden gravados: {count} em {EXPECTED_PATH}")
     return 0
 

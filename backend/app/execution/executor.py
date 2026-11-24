@@ -1,7 +1,7 @@
 """Executor: uma pool por role de vendedor (qs_reader_s<N>), sempre READ ONLY.
 
-Identidade = role. Cada QueryExecutor liga-se com as credenciais de UM vendedor, por isso a
-visibilidade é decidida pela base de dados (RLS sobre current_user), não pelo SQL.
+Identidade = role de login. Cada QueryExecutor liga-se com as credenciais de UM vendedor, por isso a
+visibilidade é decidida pela base de dados (RLS sobre session_user), não pelo SQL.
 
 Por pedido, numa transacção própria:
   SET TRANSACTION READ ONLY                       (antes de qualquer consulta)
@@ -15,7 +15,7 @@ Os erros são traduzidos para códigos genéricos; a mensagem do driver nunca é
 from __future__ import annotations
 
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -61,7 +61,6 @@ class QueryExecutor:
         statement_timeout_ms: int,
         max_rows: int,
         max_result_bytes: int,
-        cancel_dsn: str | None = None,
         deadline_ms: int | None = None,
         pool_min: int = 1,
         pool_max: int = 3,
@@ -69,9 +68,8 @@ class QueryExecutor:
         self._timeout_ms = statement_timeout_ms
         self._max_rows = max_rows
         self._max_bytes = max_result_bytes
-        # The supplied value is only a switch for the legacy constructor API. Never use its
-        # credentials: cancel through the same role that owns this query's backend.
-        self._cancel_dsn = conninfo if cancel_dsn else None
+        # Cancel through the same role that owns the target backend; it can cancel its own query.
+        self._conninfo = conninfo
         self._deadline_ms = deadline_ms if deadline_ms is not None else statement_timeout_ms + 1000
         self._pool = ConnectionPool(
             conninfo,
@@ -132,20 +130,10 @@ class QueryExecutor:
         conn.execute("SELECT qs_api.begin_request(%s)", (self._timeout_ms,))
 
     def _deadline(self, conn: psycopg.Connection[Any]) -> Any:
-        if self._cancel_dsn is None:
-            return _NoDeadline()
-        return DeadlineGuard(self._cancel_dsn, conn.info.backend_pid, self._deadline_ms / 1000)
+        return DeadlineGuard(self._conninfo, conn.info.backend_pid, self._deadline_ms / 1000)
 
     def _translate_errors(self) -> _ErrorTranslator:
         return _ErrorTranslator()
-
-
-class _NoDeadline:
-    def __enter__(self) -> None:
-        return None
-
-    def __exit__(self, *exc: object) -> None:
-        return None
 
 
 class SellerExecutors:
@@ -160,7 +148,7 @@ class SellerExecutors:
         max_rows: int,
         max_result_bytes: int,
         deadline_margin_ms: int,
-        seller_passwords: dict[int, str] | None = None,
+        seller_passwords: Mapping[int, str] | None = None,
     ) -> None:
         self._by_seller: dict[int, QueryExecutor] = {}
         for seller_id in seller_ids:
@@ -171,7 +159,6 @@ class SellerExecutors:
                 max_rows=max_rows,
                 max_result_bytes=max_result_bytes,
                 # Same login role as the target session: no admin/superuser cancellation DSN.
-                cancel_dsn=reader_conninfo,
                 deadline_ms=statement_timeout_ms + deadline_margin_ms,
             )
 

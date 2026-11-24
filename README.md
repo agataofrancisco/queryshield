@@ -8,13 +8,14 @@ Estado e tarefas: `openspec/changes/bootstrap-queryshield/tasks.md`.
 
 ## O que está pronto e o que não está
 
-- **Pronto e testado:** semantic layer, autenticação JWT demo, validador AST, geração (mock e
-  provider compatível com OpenAI), executor read-only, verificação semântica, API, frontend,
-  avaliação com 164 perguntas e baseline insegura em sandbox.
+- **Implementado:** semantic layer, autenticação JWT demo, validador AST, geração (mock e provider
+  compatível com OpenAI), executor read-only com um role por vendedor, verificação semântica, API,
+  frontend, avaliação com 164 perguntas e baseline insegura em sandbox.
 - **Não feito:** avaliação com um LLM real (não há chave neste ambiente: `TODO: medir`).
 - **Não testado localmente:** Docker, docker-compose e o workflow de CI (validados só como YAML).
-- **Pendente:** a verificação do gráfico e de três bloqueios no browser (tarefa 6.1) e a revisão de
-  segurança independente (tarefa 8.4, ver `docs/security-review.md`).
+- **Pendente:** verificação do gráfico e de três bloqueios no browser (tarefa 6.1). A revisão de
+  segurança independente está em `docs/security-review-independent.md`; faltam confirmações de
+  runtime indicadas nesse relatório.
 
 Resultados medidos: `docs/learn/08-execution-accuracy.md` e `docs/learn/09-defesa-em-profundidade.md`.
 
@@ -63,7 +64,6 @@ As versões Python estão fixadas em `pyproject.toml` (exactas) e as do frontend
    $env:QS_READER_PASSWORD_S2 = "<outro segredo único com 24+ caracteres>"
    $env:QS_READER_PASSWORD_S3 = "<terceiro segredo único com 24+ caracteres>"
    $env:QS_READER_DSN_TEMPLATE = "postgresql://{role}:{password}@127.0.0.1:<porta>/queryshield"
-   $env:QS_CANCEL_DSN = "<ligação admin, para o prazo da aplicação>"
    ```
 
 3. Migrações e seed determinístico (2 100 encomendas, 10 tabelas):
@@ -149,12 +149,11 @@ $env:QS_SANDBOX_ADMIN_DSN = "<ligação superuser ao servidor local>"
 
 | Variável | Obrigatória | Função |
 |---|---|---|
-| `QS_READER_DSN_TEMPLATE` | para executar consultas | ligação com `{role}`, substituído por `qs_reader_s<N>` (um role de login por vendedor) |
+| `QS_READER_DSN_TEMPLATE` | para executar consultas | ligação com `{role}` e `{password}`, preenchidos com o role e segredo do vendedor |
 | `QS_SELLER_IDS` | não (`1,2,3`) | vendedores com pool configurada |
-| `QS_CANCEL_DSN` | recomendado | ligação só para `pg_cancel_backend` no prazo da aplicação |
 | `QS_DEADLINE_MARGIN_MS` | não (`1000`) | margem do prazo da aplicação sobre o timeout da base de dados |
 | `QS_ADMIN_DSN` | só migrações e seed | superuser local; nunca usada pela API |
-| `QS_READER_PASSWORD_S<N>` | migrações e API | segredo individual de cada role `qs_reader_s<N>` (mínimo 24 caracteres) |
+| `QS_READER_PASSWORD_S<N>` | migrações e API | segredo individual e único de cada role `qs_reader_s<N>` (mínimo 24 caracteres) |
 | `QS_JWT_SECRET` | sim (32+ caracteres) | assina os tokens |
 | `QS_DEMO_AUTH` | não (`false`) | activa `POST /auth/demo-login` |
 | `QS_LLM_PROVIDER` | não (`mock`) | `mock` ou `openai` |

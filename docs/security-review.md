@@ -1,8 +1,9 @@
 # Revisão de segurança (auto-revisão)
 
-> **Estado:** auto-revisão feita pelo próprio executor do projecto. **Não é a revisão independente exigida
-> pela tarefa 8.4.** A tarefa 8.4 fica por marcar para o supervisor, que deve pedir a revisão a outra pessoa
-> ou a outro agente com este documento, o plano e o código.
+> **Registo histórico:** esta revisão antecede a migração 006 e descreve o antigo tenant de sessão
+> (`app.seller_id`). Para os controlos e achados actuais, usar `docs/security-review-independent.md`.
+
+> **Estado:** auto-revisão histórica; não substitui a revisão independente da tarefa 8.4.
 
 ## Âmbito e método
 

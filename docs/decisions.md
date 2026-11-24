@@ -11,14 +11,16 @@ Registo das decisões tomadas durante a implementação. As que não estavam cob
    das vistas (`qs_app`) contornaria a RLS quando o reader lê através delas.
 3. **[nova] Nenhuma vista expõe email nem telefone.** O plano previa `v_customers_analyst` sem PII;
    não há vista com PII para papel nenhum. Mais restritivo do que o pedido, sem perda de funcionalidade.
-4. **[nova] Um único role de leitura (`qs_reader`).** A separação `seller_analyst`/`seller_finance` é
-   feita pelo validador (allowlist de tabelas e colunas por papel), não por roles de base de dados.
-   Limitação: uma consulta que escape ao validador poderia ler `payouts` com o papel de analista.
-   A separação por role de base de dados (`SET LOCAL ROLE`) fica como evolução.
-5. **[nova] Tenant e timeout só via `qs_api.begin_request` (migração 005).** Revisão de ameaças com
-   o validador desligado mostrou que `qs_reader` podia chamar `set_config('app.seller_id', ...)` no SQL
-   gerado. Correcção: `set_config` retirado do `PUBLIC`; `begin_request` é `SECURITY DEFINER`, uma vez
-   por transacção, chamada pelo executor antes do SQL do utilizador.
+4. **Um role de login por vendedor (migrações 006–007).** `qs_reader_s1..s3` têm credenciais próprias,
+   não são membros uns dos outros e a RLS associa `session_user` ao vendedor. O validador continua a
+   separar tabelas por papel funcional (`seller_analyst`/`seller_finance`). A API recebe os três
+   segredos nesta implantação; comprometê-la expõe todos os vendedores, pelo que o isolamento forte
+   exige serviços e cofres de segredo separados.
+5. **Tenant derivado da identidade do role.** Uma falha antiga permitia mudar `app.seller_id` com
+   SQL na sessão (`docs/security-review.md`, A1). A migração 006 remove esse caminho: os roles de
+   vendedor não podem alterar o seu papel e a RLS consulta o mapeamento privado
+   `qs_private.seller_roles` por `session_user`, incluindo ao aceder por vistas. `qs_api.begin_request(timeout_ms)` só define o
+   `statement_timeout` local à transacção.
 6. **Seed determinístico** com `random.Random(20261120)`, sem relógio nem `hash()`.
 
 ## Validação

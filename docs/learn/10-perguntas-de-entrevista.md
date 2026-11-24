@@ -6,29 +6,30 @@ verificar no repositório, não está aqui.
 ## Segurança e base de dados
 
 **1. Porque é que o executor não usa a ligação da aplicação?**
-Porque essa ligação tem privilégios de gestão. O executor usa `qs_reader`, que só lê vistas, sem
-escrita e com `default_transaction_read_only = on` (`db/migrations/001_roles.sql`). Teste:
-`test_reader_is_a_non_superuser_read_only_role`.
+Porque essa ligação tem privilégios de gestão. O executor usa um role por vendedor
+(`qs_reader_s<N>`), que só lê vistas, sem escrita e com `default_transaction_read_only = on`
+(`db/migrations/006_per_seller_roles.sql`).
 
 **2. O que é RLS e porque não basta um `WHERE seller_id = ...` no SQL?**
 RLS é uma política aplicada pelo motor a cada linha, independente do SQL. Um `OR 1=1` ou uma subquery não a
-contorna. Teste: `test_reader_sees_only_the_authenticated_tenant`.
+contorna. A política actual deriva o vendedor do login `session_user` (`test_each_seller_role_sees_only_its_own_rows`).
 
 **3. O que faz `FORCE ROW LEVEL SECURITY` e porque o usamos?**
 Aplica a política também ao dono da tabela. Sem ele, as vistas (de `qs_app`) leriam sem RLS. Teste:
 `test_owner_role_is_subject_to_rls_because_of_force`.
 
 **4. Como se define o tenant sem injecção?**
-Pela função `qs_api.begin_request(seller, timeout)`, que faz `set_config(..., true)` com parâmetros. `SET`
-não aceita parâmetros ligados, por isso concatená-lo seria injecção (`executor.py`, `_enter_read_only`).
+O tenant é a identidade do role de login, mapeado para `seller_id` dentro da política RLS. O SQL não
+escolhe nem altera essa identidade; `qs_api.begin_request(timeout_ms)` define apenas o timeout.
 
-**5. Porque é que `set_config` está retirado do PUBLIC?**
-Porque um SQL gerado podia mudar o tenant com ele dentro da transacção. Teste:
-`test_reader_cannot_change_tenant_with_set_config`. Foi uma falha real, encontrada em revisão.
+**5. Porque é que `set_config` já não controla a RLS?**
+Uma variável de sessão podia ser alterada por SQL no mesmo pedido. A migração 006 removeu essa
+dependência e mapeia roles fixos para vendedores. O teste de ataques de sessão está em
+`test_raw_session_attacks_cannot_change_visibility`.
 
 **6. O que impede o tenant de vazar entre pedidos que reutilizam a ligação do pool?**
-`set_config(..., true)` é local à transacção e volta ao valor vazio no commit ou rollback. Teste:
-`test_tenant_does_not_leak_to_the_next_transaction`.
+Cada pool usa sempre o mesmo role de vendedor, e a ligação não muda de identidade entre pedidos.
+O timeout é local à transacção; a deadline da aplicação usa a mesma credencial do vendedor.
 
 **7. Porque é que as vistas não expõem email nem telefone?**
 Porque uma coluna que não existe na vista não pode ser lida por nenhum SQL, nem por sintaxe criativa. Teste:
