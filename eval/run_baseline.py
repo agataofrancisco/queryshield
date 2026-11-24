@@ -13,12 +13,14 @@ Uso: QS_SANDBOX_ADMIN_DSN="<ligação superuser ao servidor>" python -m eval.run
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 from pathlib import Path
 
 import psycopg
 from psycopg import sql
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from db.migrate import apply_migrations
 from db.seed import load_seed
@@ -31,16 +33,40 @@ SANDBOX_PASSWORD = "sandbox-only-password"  # só para o role de leitura do sand
 
 
 def _sandbox_admin_dsn(server_dsn: str) -> str:
-    """Substitui o nome da base na ligação do servidor pelo nome do sandbox (seguro)."""
-    from urllib.parse import urlsplit, urlunsplit
+    """Substitui o nome da base em DSN URI ou keyword pelo nome fixo do sandbox."""
+    return make_conninfo(server_dsn, dbname=SANDBOX_DB)
 
-    parts = urlsplit(server_dsn)
-    return urlunsplit(parts._replace(path=f"/{SANDBOX_DB}"))
+
+def _require_loopback_dsn(server_dsn: str) -> None:
+    """Impede que a operação destrutiva de criação toque num servidor remoto."""
+    try:
+        options = conninfo_to_dict(server_dsn)
+    except (psycopg.Error, ValueError) as exc:
+        raise ValueError("QS_SANDBOX_ADMIN_DSN inválido") from exc
+
+    for option in ("host", "hostaddr"):
+        raw_hosts = options.get(option, "")
+        if not raw_hosts:
+            continue
+        for host in raw_hosts.split(","):
+            host = host.strip().strip("[]").lower()
+            if host == "localhost":
+                continue
+            try:
+                if ipaddress.ip_address(host).is_loopback:
+                    continue
+            except ValueError:
+                pass
+            raise ValueError("a baseline só pode usar um servidor PostgreSQL de loopback")
+
+    if not options.get("host") and not options.get("hostaddr"):
+        raise ValueError("QS_SANDBOX_ADMIN_DSN tem de indicar localhost, 127.0.0.1 ou ::1")
 
 
 def create_sandbox(server_dsn: str) -> str:
     if "sandbox" not in SANDBOX_DB:
         raise RuntimeError("a base de baseline tem de conter 'sandbox'")
+    _require_loopback_dsn(server_dsn)
     with psycopg.connect(server_dsn, autocommit=True) as conn:
         conn.execute(
             sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(SANDBOX_DB))
