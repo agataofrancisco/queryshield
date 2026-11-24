@@ -28,8 +28,10 @@ jobs:
           --health-retries 20
     env:
       QS_ADMIN_DSN: postgresql://postgres:ci-only-admin@localhost:5432/queryshield
-      QS_READER_PASSWORD: ci-only-reader
-      QS_READER_DSN: postgresql://qs_reader:ci-only-reader@localhost:5432/queryshield
+      QS_READER_PASSWORD_S1: ci-only-seller-one-password-24
+      QS_READER_PASSWORD_S2: ci-only-seller-two-password-24
+      QS_READER_PASSWORD_S3: ci-only-seller-three-password-24
+      QS_READER_DSN_TEMPLATE: postgresql://{role}:{password}@localhost:5432/queryshield
       QS_JWT_SECRET: ci-only-jwt-secret-with-more-than-32-characters
     steps:
       - uses: actions/checkout@v4
