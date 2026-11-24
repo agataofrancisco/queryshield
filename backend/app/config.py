@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_SEMANTIC_DIR = ROOT_DIR / "semantic"
@@ -42,9 +43,58 @@ def _parse_int(name: str, raw: str | None, default: int, minimum: int, maximum: 
     return value
 
 
+def _parse_seller_ids(raw: str | None) -> tuple[int, ...]:
+    if raw is None or raw.strip() == "":
+        return (1, 2, 3)
+    try:
+        ids = tuple(int(part) for part in raw.split(","))
+    except ValueError as exc:
+        raise ConfigError("QS_SELLER_IDS deve ser uma lista de inteiros") from exc
+    if (
+        not ids
+        or any(i not in {1, 2, 3} for i in ids)
+        or len(set(ids)) != len(ids)
+    ):
+        raise ConfigError("QS_SELLER_IDS deve conter IDs únicos entre 1 e 3 (migração 006)")
+    return ids
+
+
+def _parse_seller_passwords(env: Mapping[str, str], seller_ids: tuple[int, ...]) -> dict[int, str]:
+    passwords = {seller_id: env.get(f"QS_READER_PASSWORD_S{seller_id}", "") for seller_id in seller_ids}
+    if any(len(password) < 24 for password in passwords.values()):
+        raise ConfigError("defina passwords distintas com pelo menos 24 caracteres para cada role")
+    if len(set(passwords.values())) != len(passwords):
+        raise ConfigError("cada role de vendedor tem de usar uma password diferente")
+    return passwords
+
+
+def seller_role_name(seller_id: int) -> str:
+    """Nome do role de login do vendedor (criado pela migração 006)."""
+    return f"qs_reader_s{seller_id}"
+
+
+def seller_dsn(
+    template: str, seller_id: int, passwords: Mapping[int, str] | None = None
+) -> str:
+    """Materializa a ligação de um vendedor, sem reutilizar credenciais entre roles."""
+    if "{role}" not in template:
+        raise ConfigError("QS_READER_DSN_TEMPLATE tem de conter {role}")
+    dsn = template.replace("{role}", seller_role_name(seller_id))
+    if "{password}" in dsn:
+        password = (passwords or {}).get(seller_id)
+        if not password:
+            raise ConfigError(f"password não configurada para o role do vendedor {seller_id}")
+        dsn = dsn.replace("{password}", quote(password, safe=""))
+    return dsn
+
+
 @dataclass(frozen=True)
 class Settings:
-    reader_dsn: str | None = None
+    # Modelo de ligação: contém o token {role}, substituído por qs_reader_s<N> em cada vendedor.
+    reader_dsn_template: str | None = field(default=None, repr=False)
+    seller_passwords: Mapping[int, str] = field(default_factory=dict, repr=False)
+    seller_ids: tuple[int, ...] = (1, 2, 3)
+    deadline_margin_ms: int = 1000
     jwt_secret: str = field(default="", repr=False)
     demo_auth: bool = False
     demo_mode: bool = False
@@ -71,8 +121,20 @@ class Settings:
         origins_raw = env.get("QS_CORS_ORIGINS", "http://localhost:13200")
         origins = tuple(o.strip() for o in origins_raw.split(",") if o.strip())
         semantic_dir = Path(env["QS_SEMANTIC_DIR"]) if env.get("QS_SEMANTIC_DIR") else None
+        seller_ids = _parse_seller_ids(env.get("QS_SELLER_IDS"))
+        reader_dsn_template = env.get("QS_READER_DSN_TEMPLATE") or None
+        seller_passwords = (
+            _parse_seller_passwords(env, seller_ids)
+            if reader_dsn_template and "{password}" in reader_dsn_template
+            else {}
+        )
         return cls(
-            reader_dsn=env.get("QS_READER_DSN") or None,
+            reader_dsn_template=reader_dsn_template,
+            seller_passwords=seller_passwords,
+            seller_ids=seller_ids,
+            deadline_margin_ms=_parse_int(
+                "QS_DEADLINE_MARGIN_MS", env.get("QS_DEADLINE_MARGIN_MS"), 1000, 0, 60_000
+            ),
             jwt_secret=env.get("QS_JWT_SECRET", ""),
             demo_auth=_parse_bool("QS_DEMO_AUTH", env.get("QS_DEMO_AUTH"), False),
             demo_mode=_parse_bool("QS_DEMO_MODE", env.get("QS_DEMO_MODE"), False),

@@ -16,7 +16,7 @@ from backend.app.api.routes_health import router as health_router
 from backend.app.api.routes_query import router as query_router
 from backend.app.api.routes_schema import router as schema_router
 from backend.app.config import ConfigError, Settings
-from backend.app.execution.executor import QueryExecutor
+from backend.app.execution.executor import SellerExecutors
 from backend.app.generation.mock import MockGenerator
 from backend.app.generation.openai_provider import OpenAICompatibleGenerator
 from backend.app.history.store import HistoryStore
@@ -60,13 +60,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.history = HistoryStore()
     app.state.generator = _build_generator(settings)
     app.state.executor = (
-        QueryExecutor(
-            settings.reader_dsn,
+        SellerExecutors(
+            settings.reader_dsn_template,
+            settings.seller_ids,
             statement_timeout_ms=settings.statement_timeout_ms,
             max_rows=settings.max_rows,
             max_result_bytes=settings.max_result_bytes,
+            deadline_margin_ms=settings.deadline_margin_ms,
+            seller_passwords=settings.seller_passwords,
         )
-        if settings.reader_dsn
+        if settings.reader_dsn_template
         else None
     )
     app.add_middleware(

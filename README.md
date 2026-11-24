@@ -59,8 +59,11 @@ As versões Python estão fixadas em `pyproject.toml` (exactas) e as do frontend
 
    ```powershell
    $env:QS_ADMIN_DSN = "<valor impresso no passo 1>"
-   $env:QS_READER_PASSWORD = "<password local escolhida para qs_reader>"
-   $env:QS_READER_DSN = "postgresql://qs_reader:<mesma password>@127.0.0.1:<porta>/queryshield"
+   $env:QS_READER_PASSWORD_S1 = "<segredo único com 24+ caracteres>"
+   $env:QS_READER_PASSWORD_S2 = "<outro segredo único com 24+ caracteres>"
+   $env:QS_READER_PASSWORD_S3 = "<terceiro segredo único com 24+ caracteres>"
+   $env:QS_READER_DSN_TEMPLATE = "postgresql://{role}:{password}@127.0.0.1:<porta>/queryshield"
+   $env:QS_CANCEL_DSN = "<ligação admin, para o prazo da aplicação>"
    ```
 
 3. Migrações e seed determinístico (2 100 encomendas, 10 tabelas):
@@ -118,7 +121,7 @@ cd frontend; npm run build                                    # build + varredur
 ## Avaliação
 
 ```powershell
-$env:QS_READER_DSN = "<ligação qs_reader>"
+$env:QS_READER_DSN_TEMPLATE = "postgresql://{role}:{password}@127.0.0.1:<porta>/queryshield"
 .\.venv\Scripts\python.exe -m eval.build_questions            # 164 perguntas (determinístico)
 .\.venv\Scripts\python.exe -m eval.build_expected             # 140 resultados golden (valida cada golden)
 .\.venv\Scripts\python.exe -m eval.run_eval                   # gera eval/reports/report-mock.json
@@ -135,7 +138,8 @@ $env:QS_SANDBOX_ADMIN_DSN = "<ligação superuser ao servidor local>"
 ## Docker e CI (não testados localmente)
 
 - `Dockerfile.backend`, `Dockerfile.frontend` e `docker-compose.yml`: sem Docker neste ambiente.
-  O compose exige `POSTGRES_PASSWORD`, `QS_READER_PASSWORD` e `QS_JWT_SECRET` num `.env` local e
+  O compose exige `POSTGRES_PASSWORD`, `QS_READER_PASSWORD_S1`, `QS_READER_PASSWORD_S2`,
+  `QS_READER_PASSWORD_S3` e `QS_JWT_SECRET` num `.env` local e
   deixa `QS_DEMO_AUTH=false` (sem login demo). Para usar a interface demo, altere-o explicitamente.
 - `.github/workflows/ci.yml`: Ruff, migrações e seed num serviço PostgreSQL, testes (unitários e
   `-m postgres`), avaliação mock e build do frontend com varredura do bundle. Validado como YAML;
@@ -145,9 +149,12 @@ $env:QS_SANDBOX_ADMIN_DSN = "<ligação superuser ao servidor local>"
 
 | Variável | Obrigatória | Função |
 |---|---|---|
-| `QS_READER_DSN` | para executar consultas | ligação `qs_reader` (único role do executor) |
+| `QS_READER_DSN_TEMPLATE` | para executar consultas | ligação com `{role}`, substituído por `qs_reader_s<N>` (um role de login por vendedor) |
+| `QS_SELLER_IDS` | não (`1,2,3`) | vendedores com pool configurada |
+| `QS_CANCEL_DSN` | recomendado | ligação só para `pg_cancel_backend` no prazo da aplicação |
+| `QS_DEADLINE_MARGIN_MS` | não (`1000`) | margem do prazo da aplicação sobre o timeout da base de dados |
 | `QS_ADMIN_DSN` | só migrações e seed | superuser local; nunca usada pela API |
-| `QS_READER_PASSWORD` | só migrações | password do `qs_reader` |
+| `QS_READER_PASSWORD_S<N>` | migrações e API | segredo individual de cada role `qs_reader_s<N>` (mínimo 24 caracteres) |
 | `QS_JWT_SECRET` | sim (32+ caracteres) | assina os tokens |
 | `QS_DEMO_AUTH` | não (`false`) | activa `POST /auth/demo-login` |
 | `QS_LLM_PROVIDER` | não (`mock`) | `mock` ou `openai` |

@@ -1,7 +1,7 @@
 # NÃO TESTADO LOCALMENTE: este ambiente não tem Docker. Validado apenas como YAML (tarefa 8.1).
 # Uso: definir as variáveis obrigatórias num ficheiro .env LOCAL (nunca commitado), depois
 #   docker compose up --build
-# Variáveis obrigatórias: POSTGRES_PASSWORD, QS_READER_PASSWORD, QS_JWT_SECRET.
+# Variáveis obrigatórias: POSTGRES_PASSWORD, QS_READER_PASSWORD_S1..S3, QS_JWT_SECRET.
 services:
   db:
     image: postgres:16-alpine
@@ -24,7 +24,9 @@ services:
     command: ["sh", "-c", "python -m db.migrate && python -m db.seed"]
     environment:
       QS_ADMIN_DSN: postgresql://postgres:${POSTGRES_PASSWORD:?}@db:5432/queryshield
-      QS_READER_PASSWORD: ${QS_READER_PASSWORD:?defina QS_READER_PASSWORD}
+      QS_READER_PASSWORD_S1: ${QS_READER_PASSWORD_S1:?defina QS_READER_PASSWORD_S1}
+      QS_READER_PASSWORD_S2: ${QS_READER_PASSWORD_S2:?defina QS_READER_PASSWORD_S2}
+      QS_READER_PASSWORD_S3: ${QS_READER_PASSWORD_S3:?defina QS_READER_PASSWORD_S3}
     depends_on:
       db:
         condition: service_healthy
@@ -34,7 +36,11 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     environment:
-      QS_READER_DSN: postgresql://qs_reader:${QS_READER_PASSWORD:?}@db:5432/queryshield
+      # {role} é substituído por qs_reader_s1..s3 (um role de login por vendedor).
+      QS_READER_DSN_TEMPLATE: postgresql://{role}:{password}@db:5432/queryshield
+      QS_READER_PASSWORD_S1: ${QS_READER_PASSWORD_S1:?defina QS_READER_PASSWORD_S1}
+      QS_READER_PASSWORD_S2: ${QS_READER_PASSWORD_S2:?defina QS_READER_PASSWORD_S2}
+      QS_READER_PASSWORD_S3: ${QS_READER_PASSWORD_S3:?defina QS_READER_PASSWORD_S3}
       QS_JWT_SECRET: ${QS_JWT_SECRET:?defina QS_JWT_SECRET}
       QS_DEMO_AUTH: "false"
       QS_LLM_PROVIDER: mock

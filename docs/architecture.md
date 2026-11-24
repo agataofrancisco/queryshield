@@ -4,14 +4,14 @@
 
 ```mermaid
 flowchart LR
-    U[Utilizador] --> FE[Frontend React<br/>porta 13200]
-    FE -->|JSON + Bearer| API[API FastAPI<br/>porta 18200]
-    API --> SEM[(semantic/*.yaml)]
-    API --> GEN[Gerador<br/>mock ou OpenAI]
-    API --> VAL[Validador AST<br/>SQLGlot]
-    API --> VER[Verificação<br/>métricas e fan-out]
-    API --> EXE[Executor<br/>pool qs_reader]
-    EXE --> DB[(PostgreSQL 16<br/>qs_api -> qs_private)]
+    U["Utilizador"] --> FE["Frontend React: porta 13200"]
+    FE -->|"JSON com Bearer"| API["API FastAPI: porta 18200"]
+    API --> SEM["semantic YAML"]
+    API --> GEN["Gerador: mock ou OpenAI"]
+    API --> VAL["Validador AST: SQLGlot"]
+    API --> VER["Verificação: métricas e fan-out"]
+    API --> EXE["Executor: um pool por role de vendedor"]
+    EXE --> DB["PostgreSQL 16: qs_api sobre qs_private"]
 ```
 
 ## Camadas de defesa
