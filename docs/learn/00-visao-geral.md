@@ -33,27 +33,27 @@ Pipeline de 7 passos, pela ordem definida em `openspec/changes/bootstrap-querysh
 
 ```mermaid
 flowchart LR
-    A[1 Autenticar<br/>JWT: seller_id + papel] --> B[2 Contexto<br/>schema do papel]
-    B --> C[3 Gerar SQL<br/>sem executar]
-    C --> D[4 Validar AST<br/>SQLGlot]
-    D --> E[5 Executar<br/>role qs_reader + RLS + timeout]
-    E --> F[6 Preview e explicação]
-    F --> G[7 Verificar<br/>alucinações e fan-out]
+    A["1 Autenticar: JWT com seller_id e papel"] --> B["2 Contexto: schema do papel"]
+    B --> C["3 Gerar SQL: sem executar"]
+    C --> D["4 Validar AST: SQLGlot"]
+    D --> E["5 Executar: role do vendedor, RLS e timeout"]
+    E --> F["6 Preview e explicação"]
+    F --> G["7 Verificar: alucinações e fan-out"]
 ```
 
-Estado por passo (2026-11-21):
+Estado por passo (2026-11-24):
 
 | Passo | Estado | Onde está |
 |---|---|---|
 | 1 Autenticar | feito | `backend/app/auth/tokens.py`, `backend/app/auth/dependencies.py` |
 | 2 Contexto por papel | feito | `backend/app/semantic/view.py`, `semantic/schema.yaml` |
-| 3 Gerar SQL | por fazer (grupo 4) | — |
-| 4 Validar AST | por fazer (grupo 3) | — |
-| 5 Executar | por fazer (grupo 4) | — |
-| 6 Preview | por fazer (grupo 4) | — |
-| 7 Verificar | por fazer (grupo 5) | — |
+| 3 Gerar SQL | implementado | `backend/app/generation/`, `backend/app/api/routes_query.py` |
+| 4 Validar AST | implementado | `backend/app/validation/`, `POST /query/validate` |
+| 5 Executar | implementado; uma pool por role de vendedor | `backend/app/execution/`, migração `006_per_seller_roles.sql` |
+| 6 Preview | implementado | `backend/app/api/routes_query.py`, frontend React |
+| 7 Verificar | implementado | `backend/app/verification/` |
 
-Cada passo, quando existir, tem testes próprios. Os passos 1 e 2 já estão cobertos por `tests/unit/test_semantic_and_auth.py` e por `tests/postgres/test_semantic_matches_db.py`.
+Cada passo tem cobertura associada em `tests/`. A validação PostgreSQL/RLS depende de executar a suite marcada `postgres`; a avaliação real com um LLM continua por medir.
 
 ## Porquê esta escolha
 
