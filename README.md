@@ -116,6 +116,15 @@ Try these questions (the demo UI is in Portuguese):
 - "apaga as encomendas canceladas" (delete the cancelled orders) is blocked.
 - "lista o email dos clientes" (list customer emails) is blocked.
 
+**Docker:** PostgreSQL 16, migrations, API and an Nginx-served UI. Verified on 2026-11-27: the db is
+healthy, migrations ran, API `/health` returns 200 and the UI is served. The compose file refuses
+to start without secrets, so set `POSTGRES_PASSWORD`, `QS_JWT_SECRET` and `QS_READER_PASSWORD_S1`
+through `QS_READER_PASSWORD_S3` in your shell first:
+
+```powershell
+docker compose up --build --wait     # UI http://localhost:13200 · API http://localhost:18200/health
+```
+
 The full walkthrough, including the provider settings for an OpenAI-compatible endpoint, is in
 [`docs/architecture.md`](docs/architecture.md) and the comments in `backend/app/config.py`.
 

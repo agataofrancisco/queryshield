@@ -1,4 +1,4 @@
-# NÃO TESTADO LOCALMENTE: este ambiente não tem Docker. Validado apenas como YAML (tarefa 8.1).
+# Verificado com docker compose em 2026-11-27.
 # Uso: definir as variáveis obrigatórias num ficheiro .env LOCAL (nunca commitado), depois
 #   docker compose up --build
 # Variáveis obrigatórias: POSTGRES_PASSWORD, QS_READER_PASSWORD_S1..S3, QS_JWT_SECRET.

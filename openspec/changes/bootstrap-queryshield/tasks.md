@@ -49,7 +49,7 @@
 
 ## 8. Entrega
 
-- [x] 8.1 Dockerfiles, `docker-compose.yml` (marcado como não testado localmente) e CI com o Postgres service (Ruff, pytest incluindo `-m postgres`, avaliação mock, build do frontend); verificar a validade do workflow
+- [x] 8.1 Dockerfiles, `docker-compose.yml` (marcado como não testado localmente) e CI com o Postgres service (Ruff, pytest incluindo `-m postgres`, avaliação mock, build do frontend); verificar a validade do workflow (2026-11-27: `docker compose up --build --wait` OK: db healthy, migrate exit 0, api `/health` 200, web 200)
 - [x] 8.2 `README.md`, `docs/architecture.md`, `docs/decisions.md` e `docs/case-study.md`; verificar os comandos
 - [x] 8.3 `docs/learn/10-perguntas-de-entrevista.md` (≥25); verificar a consistência
 - [x] 8.4 Revisão de segurança independente; achados e limites de validação documentados em `docs/security-review-independent.md`

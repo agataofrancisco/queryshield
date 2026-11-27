@@ -67,7 +67,7 @@ Todos os números vêm de `eval/reports/` e dos testes. O gerador é um **mock d
   reduzir esse raio de impacto, separar a implantação e o armazenamento de segredos por vendedor.
 - O validador é mais estrito do que a base de dados: recusa consultas legítimas sem `LIMIT` e pesquisas com
   `LIKE`. São escolhas conscientes, documentadas em `docs/decisions.md`.
-- Docker, compose e CI não foram executados (validados só como YAML).
+- Docker e compose verificados em 2026-11-27; o CI no GitHub não correu (conta bloqueada por faturação).
 - O gráfico e três bloqueios não foram verificados no browser (o mock não os produz).
 
 ## O que faria a seguir

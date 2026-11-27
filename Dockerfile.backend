@@ -1,4 +1,4 @@
-# Backend QueryShield (FastAPI). NÃO TESTADO LOCALMENTE: este ambiente não tem Docker.
+# Backend QueryShield (FastAPI). Verificado com Docker em 2026-11-27.
 # Build: docker build -f Dockerfile.backend -t queryshield-api .
 FROM python:3.12-slim
 
