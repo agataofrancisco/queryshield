@@ -82,7 +82,7 @@ Verified in the browser on 2026-11-27:
 
 Python 3.12 · FastAPI · SQLGlot · PostgreSQL 16 (roles, RLS, views, grants) · psycopg 3 + pool ·
 PyJWT · Pydantic v2 · React 19 + Vite · Recharts · CodeMirror · pytest · pgserver ·
-Ruff · Docker Compose · GitHub Actions
+Ruff · Docker Compose
 
 ## Run it locally (no Docker, no Postgres install)
 
