@@ -50,11 +50,7 @@ def _parse_seller_ids(raw: str | None) -> tuple[int, ...]:
         ids = tuple(int(part) for part in raw.split(","))
     except ValueError as exc:
         raise ConfigError("QS_SELLER_IDS deve ser uma lista de inteiros") from exc
-    if (
-        not ids
-        or any(i not in {1, 2, 3} for i in ids)
-        or len(set(ids)) != len(ids)
-    ):
+    if not ids or any(i not in {1, 2, 3} for i in ids) or len(set(ids)) != len(ids):
         raise ConfigError("QS_SELLER_IDS deve conter IDs únicos entre 1 e 3 (migração 006)")
     return ids
 
@@ -75,9 +71,7 @@ def seller_role_name(seller_id: int) -> str:
     return f"qs_reader_s{seller_id}"
 
 
-def seller_dsn(
-    template: str, seller_id: int, passwords: Mapping[int, str] | None = None
-) -> str:
+def seller_dsn(template: str, seller_id: int, passwords: Mapping[int, str] | None = None) -> str:
     """Materializa a ligação de um vendedor, sem reutilizar credenciais entre roles."""
     if "{role}" not in template or "{password}" not in template:
         raise ConfigError("QS_READER_DSN_TEMPLATE tem de conter {role} e {password}")

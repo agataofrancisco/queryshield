@@ -66,8 +66,7 @@ def apply_migrations(admin_dsn: str, reader_passwords: Mapping[int, str]) -> lis
 def main() -> int:
     admin_dsn = os.environ.get("QS_ADMIN_DSN", "")
     passwords = {
-        seller_id: os.environ.get(f"QS_READER_PASSWORD_S{seller_id}", "")
-        for seller_id in (1, 2, 3)
+        seller_id: os.environ.get(f"QS_READER_PASSWORD_S{seller_id}", "") for seller_id in (1, 2, 3)
     }
     if not admin_dsn:
         print("QS_ADMIN_DSN não definido.", file=sys.stderr)

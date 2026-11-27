@@ -30,8 +30,7 @@ EVAL_DIR = Path(__file__).resolve().parent
 REPORTS_DIR = EVAL_DIR / "reports"
 SANDBOX_DB = "qs_sandbox_insecure_baseline"
 SANDBOX_PASSWORDS = {
-    seller_id: f"sandbox-only-seller-{seller_id}-password-24"
-    for seller_id in (1, 2, 3)
+    seller_id: f"sandbox-only-seller-{seller_id}-password-24" for seller_id in (1, 2, 3)
 }
 
 

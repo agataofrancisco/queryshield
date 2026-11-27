@@ -16,9 +16,7 @@ pytestmark = pytest.mark.postgres
 
 def test_golden_results_regenerate_identically(pg_env: PgEnv, tmp_path: Path) -> None:
     out = tmp_path / "expected.jsonl"
-    count = build_expected(
-        pg_env.reader_template, pg_env.seller_passwords, output_path=out
-    )
+    count = build_expected(pg_env.reader_template, pg_env.seller_passwords, output_path=out)
     assert count == 140
     assert out.read_text(encoding="utf-8") == EXPECTED_PATH.read_text(encoding="utf-8")
 

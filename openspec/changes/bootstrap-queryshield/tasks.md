@@ -5,7 +5,7 @@
 - [x] 1.1 Criar `backend/app/{api,auth,semantic,generation,validation,execution,verification}`, `db/`, `frontend/`, `eval/` e `docs/learn/`; verificar com `git status`
 - [x] 1.2 Confirmar e fixar versões (FastAPI, Pydantic v2, SQLGlot, psycopg 3, httpx, pytest, Ruff); verificar a instalação
 - [x] 1.3 Instalar ou ligar o PostgreSQL e documentar o procedimento no Windows; verificar com `psql -c "select version()"`
-- [ ] 1.4 Criar as migrações SQL: schema (10 tabelas com FKs), roles `qs_app`/`qs_reader_s<N>`, views, RLS por `session_user` e grants; verificar com testes `-m postgres` de ausência de escrita, acesso à tabela secreta e leitura cross-seller (migração 007 ainda pendente de validação runtime)
+- [x] 1.4 Criar as migrações SQL: schema (10 tabelas com FKs), roles `qs_app`/`qs_reader_s<N>`, views, RLS por `session_user` e grants; verificar com testes `-m postgres` de ausência de escrita, acesso à tabela secreta e leitura cross-seller (validado: `pytest -m postgres` 64 passed em pgserver PostgreSQL 16, 2026-11-27)
 - [x] 1.5 Criar o seed determinístico com os casos difíceis; verificar que dois seeds com a mesma seed produzem contagens idênticas
 - [x] 1.6 Escrever `docs/learn/04-roles-grants-views.md` e `05-row-level-security.md`; verificar que cada afirmação tem um teste
 
@@ -24,7 +24,7 @@
 ## 4. Geração e execução
 
 - [x] 4.1 Implementar o provider compatível com OpenAI e o mock determinístico, o prompt com schema por papel e o parsing estruturado com `needs_clarification`; verificar com testes de pergunta simples, ambígua e injecção
-- [ ] 4.2 Implementar o executor (pool por `qs_reader_s<N>`, transacção READ ONLY, timeout, deadline, LIMIT forçado, `not_validated`, erros sem credenciais); verificar com testes `-m postgres` de timeout, cross-seller e escrita com validador desligado (ajuste do cancelamento ainda pendente de validação runtime)
+- [x] 4.2 Implementar o executor (pool por `qs_reader_s<N>`, transacção READ ONLY, timeout, deadline, LIMIT forçado, `not_validated`, erros sem credenciais); verificar com testes `-m postgres` de timeout, cross-seller e escrita com validador desligado (validado com `pytest -m postgres`, 2026-11-27)
 - [x] 4.3 Expor `POST /query/generate`, `POST /query/execute`, `GET /query/history` e `GET /health`; verificar com testes de API e isolamento de histórico
 - [x] 4.4 Escrever `docs/learn/02-text-to-sql-com-llms.md` e `06-timeouts-e-limites.md`; verificar a consistência com o código
 
@@ -36,14 +36,14 @@
 
 ## 6. Frontend
 
-- [ ] 6.1 Criar a app React com login por persona, chat, SQL com highlight, tabela, gráfico, avisos, explain e feedback; verificar no browser: uma pergunta → SQL validado → gráfico, e 3 casos bloqueados
+- [x] 6.1 Criar a app React com login por persona, chat, SQL com highlight, tabela, gráfico, avisos, explain e feedback; verificar no browser: uma pergunta → SQL validado → gráfico, e 3 casos bloqueados (verificado 2026-11-27 com mock + pgserver: "receita por mês de 2025" → 12 linhas + gráfico; bloqueados `statement_not_allowed`, `table_not_allowed`, `unknown_column`; sem erros na consola)
 - [x] 6.2 Verificar que não há credenciais nem connection strings no bundle (`npm run build` + pesquisa)
 
 ## 7. Avaliação
 
 - [x] 7.1 Criar ≥100 perguntas golden (todas as categorias e ataques) e o gerador de resultados esperados; verificar a regeneração idêntica
 - [x] 7.2 Implementar o runner (execution accuracy normalizada, SQL válido, erros de métrica, latência, custo, camada que travou cada ataque); verificar as funções de normalização com testes
-- [ ] 7.3 Implementar a baseline insegura apenas em sandbox offline e a comparação de segurança; verificar que não abre portas de rede
+- [x] 7.3 Implementar a baseline insegura apenas em sandbox offline e a comparação de segurança; verificar que não abre portas de rede (`tests/postgres/test_baseline_sockets.py`: árvore de processos observada com psutil, zero sockets LISTEN)
 - [x] 7.4 Correr a avaliação e gravar o relatório; verificar os metadados e o `TODO: medir` para o que faltar
 - [x] 7.5 Escrever `docs/learn/08-execution-accuracy.md` e `09-defesa-em-profundidade.md` com os resultados obtidos; verificar que os números vêm do relatório
 
